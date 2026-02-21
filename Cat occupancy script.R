@@ -17,9 +17,25 @@ library(unmarked)
 CatDataFull <- suppressWarnings(
   read_csv("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Cat Occupancy Study/Data/CatOccupancy_ImageData.csv")) 
 
-#fix date and time
+#fix date and time in cat data full
 CatDataFull$DateTime <- ymd_hms(CatDataFull$DateTime)
 
+#read in veg data
+habitat <- suppressWarnings(
+  read_xls("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Cat Occupancy Study/Data/cat_cam_deployment_landcover_type.xls"))
+
+#Rename habitat column (new name=old name) and site column 
+habitat <- habitat %>% 
+  dplyr::rename(`habitat` = `CLASS/landcover`, `Site` = `Label`)
+
+
+#Join vine df and site info df 
+CatDataFull <- CatDataFull %>%
+        left_join(habitat %>% select(`Site`, `habitat`),
+            by = "Site")
+
+
+#####Base occupancy###
 #Choose survey occasion length (1 trap night)
 CatDataFull$Date <- as.Date(CatDataFull$DateTime)
 
@@ -56,7 +72,55 @@ site_occ <- apply(y, 1, max)
 table(site_occ)
 
 
+####Habiat Covariate model######
 
+site_covs <- CatHabitat %>%
+  group_by(Site) %>%
+  dplyr::summarise(habitat = first(habitat), .groups = "drop")
 
+site_covs$habitat <- as.factor(site_covs$habitat)
 
+umf1 <- unmarkedFrameOccu(
+  y = y,
+  siteCovs = site_covs
+)
 
+m_hab <- occu(~1 ~ habitat, data = umf1)
+summary(m_hab)
+
+#####trying weekly detections####. 
+#This didn't work-Matrix reflects a lot more than 6 weeks and there are obviously missing detections 
+
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(unmarked)
+
+CatDataFull <- CatDataFull %>%
+  mutate(Occasion = floor_date(DateTime, "week"))
+
+all_sites <- unique(CatDataFull$Site)
+all_weeks <- seq(
+  min(CatDataFull$Occasion),
+  max(CatDataFull$Occasion),
+  by = "week"
+)
+
+full_grid <- expand.grid(
+  Site = all_sites,
+  Occasion = all_weeks
+)
+
+weekly_det <- CatDataFull %>%
+  group_by(Site, Occasion) %>%
+  dplyr::summarise(det = as.integer(any(cat_detect == 1)), .groups = "drop")
+
+weekly_det_full <- full_grid %>%
+  left_join(weekly_det, by = c("Site", "Occasion")) %>%
+  mutate(det = ifelse(is.na(det), 0, det))
+
+det_hist1 <- weekly_det_full %>%
+  pivot_wider(
+    names_from = Occasion,
+    values_from = det
+  )

@@ -1,0 +1,51 @@
+Latitude,Longitude,Date,Time,Label,Name,Specific_ID,Type,CLASS/landcover
+15.09083102,145.63632,10/21/2024,15:24:26,B81,B81 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.09254797,145.645308,10/22/2024,14:29:19,B91,B91 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.081796,145.627342,10/21/2024,14:35:38,C71,C71 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.08204503,145.63804,4/24/2025,16:40:41,C81,C81 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.08381403,145.647229,4/24/2025,17:26:16,C91,C91 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.067774,145.612644,10/21/2024,10:40:47,D51,D51 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.06964099,145.621646,10/21/2024,14:01:09,D61,D61 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.07131896,145.630837,4/24/2025,15:55:59,D71,D71 CAM,Camera point,Cat occupancy point,Casuarina Thicket
+15.07299802,145.639957,4/24/2025,15:23:33,D81,D81 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.07483902,145.649112,4/24/2025,14:51:58,D91,D91 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.058943,145.615465,10/21/2024,8:46:19,E51,E51 CAM,Camera point,Cat occupancy point,Other Shrub and Grass
+15.06064704,145.623538,10/21/2024,12:23:07,E61,E61 CAM,Camera point,Cat occupancy point,Native Limestone Forest
+15.06243397,145.632593,4/24/2025,13:30:16,E71,E71 CAM,Camera point,Cat occupancy point,Casuarina Thicket
+15.06427003,145.641697,4/24/2025,13:57:35,E81,E81 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.06628898,145.651653,4/24/2025,14:25:25,E91,E91 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.05005801,145.616289,10/18/2024,14:33:20,F51,F51 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.05359501,145.634454,10/23/2024,12:32:36,F71,F71 CAM,Camera point,Cat occupancy point,Other Shrub and Grass
+15.05533199,145.643652,10/23/2024,10:07:15,F81,F81 CAM,Camera point,Cat occupancy point,Other Shrub and Grass
+15.057174,145.65276,10/22/2024,13:24:31,F91,F91 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.03790098,145.601185,10/30/2024,13:12:46,G31,G31 CAM,Camera point,Cat occupancy point,Other Shrub and Grass
+15.03936999,145.608902,10/21/2024,9:30:49,G41,G41 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.04121301,145.618154,10/18/2024,12:32:11,G51,G51 CAM,Camera point,Cat occupancy point,Other Shrub and Grass
+15.04311101,145.627571,10/18/2024,13:13:21,G61,G61 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.04471103,145.636371,10/23/2024,15:35:28,G71,G71 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.04648497,145.645386,10/23/2024,14:40:03,G81,G81 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.028613,145.599994,11/6/2024,13:35:28,H3,H3 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.030569,145.610189,10/18/2024,10:22:19,H4,H4 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.03211102,145.619944,10/29/2024,12:20:10,H5,H5 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.03402896,145.629037,10/30/2024,12:02:57,H6,H6 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.03576402,145.638635,10/24/2024,8:46:58,H7,H7 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.03764399,145.64703,10/24/2024,10:38:47,H8,H8 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.016318,145.585392,10/28/2024,11:40:30,I1,I1 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.01663601,145.595259,10/29/2024,8:40:18,I2,I2 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.01982801,145.603568,10/18/2024,9:55:04,I3,I3 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.02161101,145.612597,10/28/2024,9:48:46,I4,I4 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.02345804,145.62178,10/17/2024,13:34:06,I5,I5 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.02504197,145.630974,10/31/2024,13:20:03,I6,I6 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.02702303,145.639962,11/14/2024,9:44:52,I7,I7 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.02881701,145.649071,10/24/2024,12:00:55,I8,I8 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.01284404,145.614499,10/18/2024,8:55:45,J4,J4 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.01448203,145.623537,10/18/2024,8:16:06,J5,J5 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.016361,145.632656,10/18/2024,7:40:04,J6,J6 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.01804098,145.641923,11/1/2024,11:04:00,J7,J7 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+15.01994502,145.650992,10/24/2024,13:04:05,J8,J8 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+14.99872397,145.589107,11/11/2024,10:39:50,K1,K1 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.00030496,145.598388,10/28/2024,14:11:40,K2,K2 CAM,Camera point,Cat occupancy point,Other Shrub and Grass
+15.009371,145.643694,11/8/2024,13:35:51,K7,K7 CAM,Camera point,Cat occupancy point,Mixed Introduced Forest
+15.01284303,145.66193,10/24/2024,14:51:58,K9,K9 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)
+14.99852397,145.636155,10/31/2024,9:08:48,L6,L6 CAM,Camera point,Cat occupancy point,Other Shrub and Grass
+15.00144096,145.653984,11/8/2024,13:06:12,L8,L8 CAM,Camera point,Cat occupancy point,Leucaena Leucocephala (Tangantangan)

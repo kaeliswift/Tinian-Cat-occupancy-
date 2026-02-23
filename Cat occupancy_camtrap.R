@@ -12,50 +12,49 @@ library(plyr)
 library(unmarked)
 library(camtrapR)
 
-#install.packages("bit64")
 
 #Step 1 import the data 
-
 #read the data from github
-CatDataFull <- read.csv("CatOccupancy_ImageData.csv")
-#fix date and time in cat data full (BG:changed mdy_hms to mdy_hm)
-CatDataFull$DateTime <- mdy_hm(CatDataFull$DateTime)
+ImageData <- read.csv("CatImageData.csv")
 
-#read in veg data
-habitat <- read.csv("cat_cam_deployment_landcover_type.csv")
+#reformat date
+ImageData$DateTime <- as.POSIXct(ImageData$DateTime,
+                                 format = "%Y-%m-%d %H:%M:%S",
+                                 tz = "Pacific/Guam")
 
-###Just for now, create fake deployment info - use the date on the habitat file
-###as the start date and then 60 days later as the end
+#check that it worked (should say POSIXct)
+class(ImageData$DateTime)
+head(ImageData$DateTime)
 
-# 1. Create a date object
-habitat$Date<- as.Date(habitat$Date, "%m/%d/%Y")
 
-# 2. Add 60 days using the '+' operator to create "EndDate"
-habitat$EndDate<- habitat$Date + 60
+#read in site and deployment data
+SiteFull <- read.csv("Site.csv")
 
-#Rename habitat column (new name=old name), site column, and date
-habitat <- habitat %>% 
-  dplyr::rename(`habitat` = `CLASS.landcover`, `Site` = `Label`, 'StartDate' = 'Date') 
 
 #Create a camera operation file - camtrapR does this by assuming the camera is operational
 #from the 'setup' to 'retrieval', but we can change that if there are any issues
 
-cameraOp <- cameraOperation(habitat, 
-                                   stationCol = "Site", 
-                                   setupCol = "StartDate", 
-                                   retrievalCol = "EndDate", 
-                                   hasProblems = FALSE,
-                                   allCamsOn = FALSE, 
-                                   camerasIndependent = FALSE,
-                                   dateFormat = "%Y-%m-%d", 
-                                   writecsv = TRUE, 
-)
+SiteFull$Session <- 1:nrow(SiteFull)  # just a unique number for each deployment
+
+cameraOp <- cameraOperation(SiteFull, 
+                            stationCol = "Site", 
+                            sessionCol = "Session",
+                            setupCol = "Deployment", 
+                            retrievalCol = "Termination", 
+                            hasProblems = FALSE,
+                            allCamsOn = FALSE, 
+                            camerasIndependent = FALSE,
+                            dateFormat = "%Y-%m-%d", 
+                            writecsv = TRUE)
+
 
 ##Once the camera file is set up, now you set up the detection histories for any species
 ##and using "occasionLength" to say how long an occassion should be, I set it to 7 right now
 ##there were no cats listed in "Animal_2", so I'm just using the first animal column
 
-cats <- detectionHistory(recordTable       = CatDataFull,
+ImageData_clean <- ImageData[!is.na(ImageData$Animal_1), ]
+
+cats <- detectionHistory(recordTable       = ImageData_clean,
                               camOp                = cameraOp,
                               stationCol           = "Site",
                               speciesCol           = "Animal_1",
@@ -66,7 +65,8 @@ cats <- detectionHistory(recordTable       = CatDataFull,
                               datesAsOccasionNames = FALSE,
                               includeEffort        = FALSE,
                               scaleEffort          = FALSE,
-                              timeZone             = "Pacific/Guam"
+                              timeZone             = "Pacific/Guam",
+                              unmarkedMultFrameInput = TRUE #added this line b/c other wise returned "Error in detectionHistory(recordTable = ImageData_clean, camOp = cameraOp, : argument "unmarkedMultFrameInput" is missing, with no default"
 )
 
 
@@ -80,13 +80,17 @@ summary(m0)
 
 
 
-####Habiat Covariate model######
+####Habitat Covariate model######
 
-habitat$habitat <- as.factor(habitat$habitat)
+# Create a data frame with one row per deployment
+siteCovs_expanded <- SiteFull[match(rownames(cats$detection_history), SiteFull$Site), ]
+
+# Keep only the covariate(s) you need
+siteCovs_expanded <- data.frame(habitat = siteCovs_expanded$Habitat)
 
 umf1 <- unmarkedFrameOccu(
   y = cats$detection_history,
-  siteCovs = data.frame(habitat=habitat$habitat)
+  siteCovs = siteCovs_expanded
 )
 
 m_hab <- occu(~1 ~ habitat, data = umf1)

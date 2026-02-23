@@ -15,12 +15,6 @@ library(camtrapR)
 #install.packages("bit64")
 
 #Step 1 import the data 
-#KAELI'S mac path 
-#CatDataFull <- suppressWarnings(
-#  read_csv("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Cat Occupancy Study/Data/CatOccupancy_ImageData.csv")) 
-#habitat <- suppressWarnings(
-#  read_xls("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Cat Occupancy Study/Data/cat_cam_deployment_landcover_type.xls"))
-
 
 #read the data from github
 CatDataFull <- read.csv("CatOccupancy_ImageData.csv")
@@ -30,18 +24,21 @@ CatDataFull$DateTime <- mdy_hm(CatDataFull$DateTime)
 #read in veg data
 habitat <- read.csv("cat_cam_deployment_landcover_type.csv")
 
-###Just for now, create fake deployment info based on camera info
+###Just for now, create fake deployment info - use the date on the habitat file
+###as the start date and then 60 days later as the end
 
 # 1. Create a date object
 habitat$Date<- as.Date(habitat$Date, "%m/%d/%Y")
 
-# 2. Add 60 days using the '+' operator
+# 2. Add 60 days using the '+' operator to create "EndDate"
 habitat$EndDate<- habitat$Date + 60
 
-##use "Date" in the 
-#Rename habitat column (new name=old name) and site column 
+#Rename habitat column (new name=old name), site column, and date
 habitat <- habitat %>% 
   dplyr::rename(`habitat` = `CLASS.landcover`, `Site` = `Label`, 'StartDate' = 'Date') 
+
+#Create a camera operation file - camtrapR does this by assuming the camera is operational
+#from the 'setup' to 'retrieval', but we can change that if there are any issues
 
 cameraOp <- cameraOperation(habitat, 
                                    stationCol = "Site", 
@@ -54,8 +51,9 @@ cameraOp <- cameraOperation(habitat,
                                    writecsv = TRUE, 
 )
 
-
-
+##Once the camera file is set up, now you set up the detection histories for any species
+##and using "occasionLength" to say how long an occassion should be, I set it to 7 right now
+##there were no cats listed in "Animal_2", so I'm just using the first animal column
 
 cats <- detectionHistory(recordTable       = CatDataFull,
                               camOp                = cameraOp,
@@ -72,7 +70,7 @@ cats <- detectionHistory(recordTable       = CatDataFull,
 )
 
 
-#####Base occupancy###
+#####Base occupancy in unmarked###
 
 umf<- unmarkedFrameOccu(y = cats$detection_history)
 

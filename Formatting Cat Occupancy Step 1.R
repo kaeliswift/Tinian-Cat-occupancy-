@@ -43,5 +43,5 @@ SiteFull <- CatSiteInfo %>%
             by = "Site")
 
 #Write out joined site info file 
-write.csv(SiteFull, "SiteFull", row.names = FALSE)
+write.csv(SiteFull, "Site.csv", row.names = FALSE)
 

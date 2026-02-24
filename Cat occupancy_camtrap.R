@@ -34,18 +34,24 @@ SiteFull <- read.csv("Site.csv")
 #Create a camera operation file - camtrapR does this by assuming the camera is operational
 #from the 'setup' to 'retrieval', but we can change that if there are any issues
 
-SiteFull$Session <- 1:nrow(SiteFull)  # just a unique number for each deployment
+SiteFull$cameraID <- as.numeric(ave(
+  SiteFull$Site,
+  SiteFull$Site,
+  FUN = seq_along
+))
 
-cameraOp <- cameraOperation(SiteFull, 
-                            stationCol = "Site", 
-                            sessionCol = "Session",
-                            setupCol = "Deployment", 
-                            retrievalCol = "Termination", 
-                            hasProblems = FALSE,
-                            allCamsOn = FALSE, 
-                            camerasIndependent = FALSE,
-                            dateFormat = "%Y-%m-%d", 
-                            writecsv = TRUE)
+
+cameraOp <- cameraOperation(
+  SiteFull,
+  stationCol = "Site",
+  cameraCol = "cameraID",
+  setupCol = "Deployment",
+  retrievalCol = "Termination",
+  allCamsOn = FALSE,
+  byCamera = FALSE,
+  camerasIndependent = FALSE,
+  dateFormat = "%Y-%m-%d"
+)
 
 
 ##Once the camera file is set up, now you set up the detection histories for any species

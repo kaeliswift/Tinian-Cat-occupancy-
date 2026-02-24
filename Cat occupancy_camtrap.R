@@ -75,20 +75,13 @@ cats <- detectionHistory(recordTable       = ImageData_clean,
 )
 
 
-#####Base occupancy in unmarked###
-
-umf<- unmarkedFrameOccu(y = cats$detection_history)
-
-m0 <- occu(~ 1 ~1, umf)
-
-summary(m0)
-
-
-
 ####Habitat Covariate model######
 
 # Create a data frame with one row per deployment
 siteCovs_expanded <- SiteFull[match(rownames(cats$detection_history), SiteFull$Site), ]
+
+siteCovs_expanded$Habitat[siteCovs_expanded$Habitat == "Casuarina Thicket"] <- "Mixed Introduced Forest"
+siteCovs_expanded$Habitat[siteCovs_expanded$Habitat == "Native Limestone Forest"] <- "Mixed Introduced Forest"
 
 # Keep only the covariate(s) you need
 siteCovs_expanded <- data.frame(habitat = siteCovs_expanded$Habitat)
@@ -98,8 +91,16 @@ umf1 <- unmarkedFrameOccu(
   siteCovs = siteCovs_expanded
 )
 
+#####Base occupancy in unmarked###
+
+m0 <- occu(~ 1 ~1, umf1)
+
 m_hab <- occu(~1 ~ habitat, data = umf1)
 summary(m_hab)
 
 m_hab_det <- occu(~habitat ~ 1, data = umf1)
 summary(m_hab_det)
+
+m_hab_both <- occu(~habitat ~ habitat, data = umf1)
+summary(m_hab_both)
+

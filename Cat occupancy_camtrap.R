@@ -72,7 +72,6 @@ cats <- detectionHistory(recordTable       = ImageData_clean,
                               includeEffort        = FALSE,
                               scaleEffort          = FALSE,
                               timeZone             = "Pacific/Guam",
-                              unmarkedMultFrameInput = TRUE #added this line b/c other wise returned "Error in detectionHistory(recordTable = ImageData_clean, camOp = cameraOp, : argument "unmarkedMultFrameInput" is missing, with no default"
 )
 
 

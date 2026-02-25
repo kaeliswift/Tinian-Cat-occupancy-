@@ -9,7 +9,7 @@ library(dplyr)
 library(plyr)
 library(unmarked)
 
-Step 1 import the data 
+#Step 1 import the data 
 #KAELI'S mac path 
 CatDataFull <- suppressWarnings(
   read_csv("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Cat Occupancy Study/Data/CatOccupancy_ImageData.csv")) 

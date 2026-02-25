@@ -1,4 +1,3 @@
-#This is the first step towards making a new repo. 
 
 library(tidyverse) # used for dataframe man
 library(readxl) # import excel
@@ -66,7 +65,7 @@ cats <- detectionHistory(recordTable       = ImageData_clean,
                               speciesCol           = "Animal_1",
                               recordDateTimeCol    = "DateTime",
                               species              = "Cat",
-                              occasionLength       = 7,
+                              occasionLength       = 1,
                               day1                 = "station",
                               datesAsOccasionNames = FALSE,
                               includeEffort        = FALSE,
@@ -103,4 +102,23 @@ summary(m_hab_det)
 
 m_hab_both <- occu(~habitat ~ habitat, data = umf1)
 summary(m_hab_both)
+
+
+#Produce tables for MICC
+library(MuMIn)
+
+ms <- model.sel(m0, m_hab, m_hab_det, m_hab_both)
+
+ms_out <- ms[, c("df", "AICc", "delta", "weight")]
+round(ms_out, 3)
+
+ms <- model.sel(m0, m_hab, m_hab_det, m_hab_both)
+
+colnames(ms)[colnames(ms) == "df"] <- "K"
+
+ms_out <- ms[, c("K", "AICc", "delta", "weight")]
+round(ms_out, 3)
+
+summary(m_hab_det)
+
 

@@ -1,3 +1,9 @@
+#Spatial Capture Recapture Analysis of Tinian Cats.......................................
+#Created April 2026
+
+#See SCR Assumptions at end of code
+
+#use install.packages() for packages not in your library
 library(secr)
 library(tidyverse)
 library(lubridate)
@@ -7,6 +13,7 @@ library(sf)
 #Make captfile....................................................................
 #Session | Animal | Occasion | TrapID
 
+#Individual identification was preformed on TrapTagger
 raw.data <- read.csv("TrapTagger_Cat_Individuals.csv")
 
 #Data Cleaning ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -150,10 +157,14 @@ traps <- traps %>%
          y = coords[,2]) 
 
 #Defining Effort~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#Find the length of time each detector recorded for 
+#Find if each detector recorded within an occasion 
 #CURRENT METHOD DOES NOT WORK --> WILL NEED TO REFORMAT!!!
 
+
 #Defining Covariates~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#LandCover
+#LOOK FOR ELEVATIONS ????
+#Distance from road//humans???
 
 #Pulling one trapfile per session~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #adding sessions to start_end
@@ -180,9 +191,10 @@ traps_year2 <- traps %>%
   filter(TrapID %in% trapIDs_year2) %>%
   select(TrapID, x, y) 
 
-#Creating capthist....................................................................
+#Creating txt files for making capt. hist. ....................................................................
 
 capt <- data %>% select(Session, Animal, Occasion, TrapID)
+
 
 #writing text files in format that read.capthist() will like
 write.table(capt, "capt_all.txt",
@@ -197,18 +209,19 @@ write.table(traps_year2, "traps_year2.txt",
             row.names = FALSE, col.names = FALSE,
             quote = FALSE, sep = "\t")
 
-#Creating capture history object..............
+#Creating capture history.......................................................
 ch <- read.capthist(
   captfile = "capt_all.txt",
   trapfile = list("traps_year1.txt", "traps_year2.txt"),
   detector = "count",
   fmt = "trapID",
-  binary.usage = FALSE) #this one game me a lot of issues....
+  binary.usage = FALSE) #this one gave me a lot of issues....
 
 summary(ch)
 
+#Plot ch for each session
 par(mar = c(1,1,3,1)) 
-plot (ch, tracks = TRUE) #will plot ch of sessions
+plot (ch, tracks = TRUE) 
 
 #To do................
 #1. create proper mask
@@ -217,37 +230,39 @@ plot (ch, tracks = TRUE) #will plot ch of sessions
 #4. create effort matrix & incorporate that somehow
 
 
-#Creating trap object......
+#Creating trap object..............................................................
 ch.traps <- traps(ch)
 
-#Creating mask...........
+#Creating mask........................................................................
 #THESE #s CAN CHANGE BASED ON WHAT WE WANT
 ch.mask <- make.mask(ch.traps, buffer = 1000, #buffer of 1 km around the points to make grid
                      spacing = 500, #mask points at 500 m intervals w/in the grid
                      type = "trapbuffer")
 
-#Creating models...........................................................
+#Creating models......................................................................
+#Null model - Half Harzard Normal
 m0 <- secr.fit(ch, detectfn = "HHN", mask = ch.mask,
                model = list(D ~ 1, lambda0 ~ 1, sigma ~ 1))
+print(m0) #will show m0 results
 
+#Null model - Exponential
+m0ex <- secr.fit(ch, detectfn = "EX", mask = ch.mask,
+                model = list(D ~ 1, g0 ~ 1, sigma ~ 1))
+
+#Density varies by Session
 ms <- secr.fit(ch, detectfn = "HHN", mask = ch.mask,
                model = list(D ~ Session, lambda0 ~ 1, sigma ~ 1))
 print(ms)
 
-print(m0) #will show m0 results
+#FIGURE OUT IF WE SHOULD USE HHN OR EX
 
-m0a <- secr.fit(ch, detectfn = "EX", mask = ch.mask,
-                model = list(D ~ 1, g0 ~ 1, sigma ~ 1))
-
-print(m0a)
-
-#Comparing models........
-AIC(m0,m0a,ms) #m0a has lower AIC
+#Comparing models...........................................................
+AIC(m0,m0ex,ms) #m0a has lower AIC
 
 #idea of density from pt
 #if you looked @ cats captured where their center activity is
 
-#Plotting models............
+#Plotting models.....................................................................
 #issues w/ adding labs & multiple models will need to revisit
 plot(m0a)
 #mtext("Distance (m)", side = 1, line = 2.5)
@@ -255,4 +270,66 @@ plot(m0a)
 
 plot(m0)
 #title(xlab = "Distance (m)", ylab = "Detection prob.")
+
+#Detection probability (p)...............................................................
+#Unknown # of animals NOT seen
+#An unknown proportion of total animals seen 
+#D = N/A = C.hat/p*A
+#Activity center (D)
+#Count (C.hat)
+
+#Creating a raw # individuals per trap graph.................................................
+individuals <- data %>% 
+  group_by(TrapID) %>% 
+  summarise(n_individuals = n_distinct(Animal))
+
+individuals <- individuals %>% 
+  right_join(traps, by = "TrapID")
+
+individuals <- individuals %>% 
+  select(TrapID, n_individuals, CLASS.landcover) %>% 
+  rename(LandCover = CLASS.landcover)
+
+individuals$n_individuals[is.na(individuals$n_individuals)] <- 0
+
+individuals <- start_end %>% 
+  rename(TrapID = Site.Name) %>% 
+  right_join(individuals) %>% 
+  select(TrapID, n_individuals, LandCover, Session)
+
+individuals <- individuals %>% 
+  distinct()
+
+individuals <- individuals %>%
+  mutate(Session = recode(Session,
+                          `1` = "2024",
+                          `2` = "2025"))
+
+#sort by # individuals (removed for now)
+#individuals <- individuals %>%
+ # mutate(TrapID = factor(TrapID, levels = TrapID[order(-n_individuals)]))
+
+library(ggplot2)
+
+ggplot(individuals, aes(x = TrapID, y = n_individuals, fill = LandCover)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_viridis_d()+
+  labs(
+    x = "Trap",
+    y = "Number of Individuals",
+    fill = "Landcover",
+    title = "Individuals per Trap by Land Cover"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+#SCR ASSUMPTIONS##################################################################
+#1. Population is closed to changes
+#2, Accurate id of individuals
+#3. Detection is never perfect (p is fn of dist. from D-activity center)
+#4. Size of mask is big enough to ensure no animals from outside the cam array get captured
+#5. Independence btw individuals (ignore dependent individuals, ex.- kittens)
+
+#WILL NEED TO CHECK THAT KITTEN IS REMOVED FROM THE ANALYSIS!!!!
 

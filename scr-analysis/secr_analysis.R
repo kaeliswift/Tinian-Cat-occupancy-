@@ -159,7 +159,52 @@ traps <- traps %>%
 #Defining Effort~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #Find if each detector recorded within an occasion 
 #CURRENT METHOD DOES NOT WORK --> WILL NEED TO REFORMAT!!!
+#adding sessions to start_end
+start_end <- start_end %>% 
+  mutate(Session = ifelse(year(Deployment) == 2024, 1, 2))
 
+occasions <- start_end %>%
+  group_by(Site.Name, Session) %>%
+  summarise(start_date = min(Deployment)) %>%
+  ungroup()
+
+#THIS DOES NOT SEEM RIGHT:
+#occasions <- occasions %>%
+ # rowwise() %>%
+  #mutate(occ_list = list(data.frame(
+   # occasion = 1:6,
+    #occ_start = start_date + days((0:5)*7)))) %>%
+  #unnest(occ_list) %>%
+  #mutate(occ_end = occ_start + days(6))
+
+#effort <- start_end %>%
+ # left_join(occasions, by = "session")
+#effort <- effort[,-c(4,5)]
+
+#effort <- effort %>%
+ # mutate(active = ifelse(
+  #  Deployment <= occ_end & Termination >= occ_start, 1, 0))
+
+#effort <- effort %>%
+ # group_by(Site.Name, session, occasion) %>%
+  #summarise(active = max(active), .groups = "drop")
+
+#effort.matrix <- effort %>%
+ # pivot_wider(
+  #  names_from = occasion,
+   # values_from = active,
+    #values_fill = 0)
+
+#effort_year1 <- effort.matrix %>%
+ # filter(session == "year1") %>%
+  #arrange(Site.Name)
+
+#effort_year2 <- effort.matrix %>%
+ # filter(session == "year2") %>%
+  #arrange(Site.Name)
+
+#effort_year1 <- as.matrix(effort_year1[, -c(1,2)])
+#effort_year2 <- as.matrix(effort_year2[, -c(1,2)])
 
 #Defining Covariates~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #LandCover
@@ -167,9 +212,6 @@ traps <- traps %>%
 #Distance from road//humans???
 
 #Pulling one trapfile per session~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#adding sessions to start_end
-start_end <- start_end %>% 
-mutate(Session = ifelse(year(Deployment) == 2024, 1, 2))
 
 #pulling trapIDs per sessions
 trapIDs_year1 <- start_end %>%
@@ -306,23 +348,24 @@ individuals <- individuals %>%
                           `2` = "2025"))
 
 #sort by # individuals (removed for now)
-#individuals <- individuals %>%
- # mutate(TrapID = factor(TrapID, levels = TrapID[order(-n_individuals)]))
+individuals <- individuals %>%
+ mutate(TrapID = factor(TrapID, levels = TrapID[order(-n_individuals)]))
 
 library(ggplot2)
 
 ggplot(individuals, aes(x = TrapID, y = n_individuals, fill = LandCover)) +
   geom_bar(stat = "identity", position = "dodge") +
-  scale_fill_viridis_d()+
+  scale_fill_brewer(palette="Set1")+
   labs(
     x = "Trap",
     y = "Number of Individuals",
     fill = "Landcover",
-    title = "Individuals per Trap by Land Cover"
+    title = "Individuals per Trap"
   ) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+ggsave("Individuals-Traps.png", width = 9, height = 4,)
 
 #SCR ASSUMPTIONS##################################################################
 #1. Population is closed to changes

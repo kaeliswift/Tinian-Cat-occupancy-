@@ -1,0 +1,16 @@
+Spatial-Capture-Recapture Analysis for Feral Cats on Tinian using secr package in R
+ 
+ cat_individuals.Rproj is the R project I was working out of. Run install.packages() for any packages not yet in your R library. 
+
+ The csvs you need for the project are within this folder.
+
+ The pdfs are useful documents I used to learn about the package.
+ 
+If y'all would also like to try the oSCR package, 
+I was working upon being able to incorporate our data into the existing code TrapTagger provides 
+(for some reason there is no straightforward way; their code is just a function). 
+I put a pause on that to push forward and get a secr model running, but that code is in traptagger_oSCR.R. 
+
+The two R scripts that start with try1, you can skip. 
+They are failed attempts of mine (I am just holding on to them right now if the script becomes useful). 
+

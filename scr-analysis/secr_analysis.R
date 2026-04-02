@@ -346,6 +346,26 @@ individuals <- individuals %>%
   mutate(Session = recode(Session,
                           `1` = "2024",
                           `2` = "2025"))
+#Find average # individuals per landcover
+avg_land <- individuals %>%
+  group_by(LandCover) %>%
+  summarise(avg_individuals = mean(n_individuals),
+            sd_individuals = sd(n_individuals),
+    .groups = "drop")
+
+#plot of avg per land cover
+ggplot(avg_land,
+       aes(x = LandCover, y = avg_individuals, fill = LandCover)) +
+  geom_bar(stat = "identity") +
+  scale_fill_brewer(palette = "BuGn") +
+  labs(
+    x = "Landcover",
+    y = "Average Individuals per Trap",
+    fill = "Landcover",
+    title = "Average Individuals per Trap by Landcover"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 #sort by # individuals (removed for now)
 individuals <- individuals %>%

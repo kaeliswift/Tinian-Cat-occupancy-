@@ -295,9 +295,21 @@ suggest.buffer(cats.HZ)
 
 
 #changing buffer to 2000
+HN.2000 <-secr.fit(ch, buffer=2000, detectfn = 0)
+HN.2000
+HZ.2000 <- secr.fit(ch, buffer = 2000, detectfn = 1)
+HZ.2000
+EX.2000 <- secr.fit(ch, buffer = 2000, detectfn = 2)
+EX.2000
 
+#compare AICs
+AIC(HN.2000, HZ.2000, Ex.2000) #buffer = 2000, worse AICs HZ is still the best model
+AIC(cats.HN, cats.HZ, cats.EX) #buffer = 3000
+#are these comparable?
 
-#trying different buffer fits
+#Playing around with different buffer sizes ########################################
+
+#trying different buffer fits...................................
 buffers <- c(2000, 3000, 4000, 5000)
 
 fits <- lapply(buffers, function(b) {
@@ -420,12 +432,73 @@ sapply(fits, function(fit) {
 #buffer_results #going with 3000 m 
 
 
-#capture history check 
-summary(ch)
+#Incorporating a habitat mask ####################################################
 
-# number of unique detectors per individual
-ch.array <- as.array(ch)
-#potential issue is that there are not many recaptures of individuals across the grid
+#reading in CNMI high-res veg data
+tinian <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp")
 
-#n.traps <- apply(ch.array, 1, function(x) sum(rowSums(x) > 0))
-#didnt work -> taking a pause......
+plot(tinian)
+
+#converting to a polygon
+library(sp)
+tinian_sp <- as(tinian, "Spatial")
+
+#are traps formatted properly?
+ch.traps #yes
+
+#do I need to incorporate area boundaries???
+
+#make habitat mask with Tinian high res data
+habitat <- make.mask(
+  ch.traps,
+  buffer = 3000,              # adjust buffer (meters) ---> NEEDS TO BE WHAT YOU WANT IN MODEL
+  spacing = 100,              # grid resolution ---> CAN CHANGE THIS // RN GIVES 10 PTS BTW CAMS
+  type = "polygon",
+  poly = tinian_sp
+)
+
+#trying null models w/ habitat mask..............................................
+fit0.HN <- secr.fit(
+  ch,
+  mask = habitat,
+  detectfn = "HN",
+  model = list(D ~ 1, g0 ~ 1, sigma ~ 1)
+)
+
+fit0.HN
+
+hold=predictDsurface(fit0.HN, mask = habitat, alpha = 0.05)
+plot(hold) #looks weird --> may need to constrain to MLA?????
+
+covariates(habitat) #class never transferred data w/ polygon
+
+
+#WORK ON  CONVERTING MASK COVARIATE DATA...........
+class(habitat)
+covariates(habitat) #class never transferred data w/ polygon
+names(covariates(habitat))
+str(covariates(habitat))
+
+#convert mask to sf points
+mask_sf <- st_as_sf(
+  as.data.frame(habitat),
+  coords = c("x", "y"),
+  crs = st_crs(tinian)
+) #didn't work most likely sessions
+
+str(habitat[[1]]) #habitat is included but hidden w/in
+
+
+#extracting mask points
+mask_points <- data.frame(
+  x = habitat[[1]]$x,
+  y = habitat[[1]]$y
+)
+
+veg_sf <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp")
+
+#spatial join
+mask_sf <- st_as_sf(mask_points, coords = c("x","y"), crs = st_crs(veg_sf))
+
+#DIDNT WORK..... CONTINUE ON THIS (think its CLASS name):
+join <- st_join(mask_sf, veg_sf["CLASS.landcover"])

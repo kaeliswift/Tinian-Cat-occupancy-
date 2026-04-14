@@ -1,2 +1,5 @@
 -why are the suggest.buffer estimates so small (lines 253 - 260)
+
 -dbar and MMDM are much larger (lines 261 to 270)
+
+-do I need to incorporate area boundaries?

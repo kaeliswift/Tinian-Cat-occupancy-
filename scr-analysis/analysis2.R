@@ -98,6 +98,18 @@ data.clean <- data %>%
 #replacing data w/ detections >30 min apart
 data <- data.clean
 
+#checking for only 1 encounter......
+table(data.clean$Individuals)
+length(unique(data.clean$Individuals)) #47 individuals
+
+#REMOVING INDIVIDUALS W/ ONLY 1 ENCOUNTER
+counts <- table(data.clean$Individuals)
+data.filtered <- data.clean[data.clean$Individuals %in% names(counts[counts > 1]), ]
+length(unique(data.filtered$Individuals)) #26 individuals 
+
+#replacing data w/ individuals with k > 1 encounters 
+data <- data.filtered
+
 #Defining Occasion~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #chose 1 week = 1 occasion
 #chose to cap at 6 occasions to match methods of 6-week deployment
@@ -226,7 +238,7 @@ cats.HN<-secr.fit(ch, buffer=3000)
 
 cats.HN
 
-#get D, g0, and sigma on the real line (backtransformed from the link function)
+#get D, g0, and sigma on the real line (back-transformed from the link function)
 predict(cats.HN)
 
 #calculate the confidence interval for a parameter
@@ -273,16 +285,25 @@ plot(cats.HZ, xval = xv, limits = FALSE, lty = 3, add = TRUE)
 aic.tab=AIC(cats.HN, cats.HZ, cats.EX)
 aic.tab #cats.HZ has lowest AIC
 
-cats.HZ #sigma = 582 
-#sigma x 3 = 1746 meters
+cats.HZ #sigma = 587 
+#sigma x 3 = 1761 meters
 
-#buffer sensitivity check.......................................................
-buffers <- c(2000, 3000, 4000, 5000, 6000, 7000) #checking 2 to 7 km 
+esa.plot(cats.HZ)
+?esa.plot #being phased out
+
+suggest.buffer(cats.HZ)
+
+
+#changing buffer to 2000
+
+
+#trying different buffer fits
+buffers <- c(2000, 3000, 4000, 5000)
 
 fits <- lapply(buffers, function(b) {
-  secr.fit(ch, buffer = b)}) #fitting all the buffers
+  secr.fit(capthist = ch, buffer = b, detectfn = 1)
+})
 
-#checking if D estimate stabilizes
 
 #session 1
 sapply(fits, function(fit) {
@@ -294,44 +315,117 @@ sapply(fits, function(fit) {
 #both sessions 
 sapply(fits, function(fit) {
   sapply(derived(fit), function(x) x["D","estimate"])
+}) 
+
+#density estimates still decreasing -> increase buffer size..........
+
+buffers <- c(3000, 5000, 7000, 10000)
+
+fits <- lapply(buffers, function(b) {
+  secr.fit(capthist = ch, buffer = b, detectfn = 1)
 })
+
+
+#session 1
+sapply(fits, function(fit) {
+  derived(fit)[[1]]["D","estimate"]})
+#session 2 
+sapply(fits, function(fit) {
+  derived(fit)[[2]]["D","estimate"]})
+
+#both sessions 
+sapply(fits, function(fit) {
+  sapply(derived(fit), function(x) x["D","estimate"])
+}) 
+
+
+#trying with HN instead to see if density stabilizes...........
+buffers <- c(3000, 5000, 7000, 10000)
+
+fits <- lapply(buffers, function(b) {
+  secr.fit(capthist = ch, buffer = b, detectfn = 0)
+})
+
+#session 1
+sapply(fits, function(fit) {
+  derived(fit)[[1]]["D","estimate"]})
+#session 2 
+sapply(fits, function(fit) {
+  derived(fit)[[2]]["D","estimate"]})
+
+#both sessions 
+sapply(fits, function(fit) {
+  sapply(derived(fit), function(x) x["D","estimate"])
+}) 
+
+
+
+#buffer sensitivity check.......................................................
+#buffers <- c(2000, 3000, 4000, 5000, 6000, 7000) #checking 2 to 7 km 
+
+#fits <- lapply(buffers, function(b) {
+ # secr.fit(ch, buffer = b)}) #fitting all the buffers
+
+#checking if D estimate stabilizes
+
+#session 1
+#sapply(fits, function(fit) {
+ # derived(fit)[[1]]["D","estimate"]})
+#session 2 
+#sapply(fits, function(fit) {
+ # derived(fit)[[2]]["D","estimate"]})
+
+#both sessions 
+#sapply(fits, function(fit) {
+ # sapply(derived(fit), function(x) x["D","estimate"])
+#})
 
 #graphing
-D_values <- sapply(fits, function(fit) {
-  sapply(derived(fit), function(x) x["D","estimate"])
-})
+#D_values <- sapply(fits, function(fit) {
+  #sapply(derived(fit), function(x) x["D","estimate"])
+#})
 
-matplot(buffers, t(D_values), type = "b", pch = 1:2, col = 1:2,
-        xlab = "Buffer (m)", ylab = "D estimate", lty = 1:2)
-legend("topright", legend=c("Session 1","Session 2"), pch=1:2, lty=1:2)
+#matplot(buffers, t(D_values), type = "b", pch = 1:2, col = 1:2,
+ #       xlab = "Buffer (m)", ylab = "D estimate", lty = 1:2)
+#legend("topright", legend=c("Session 1","Session 2"), pch=1:2, lty=1:2)
 
 
 #stabilized buffer
 # Calculate relative change between successive D estimates
-rel_change <- abs(diff(D_estimates) / D_estimates[-length(D_estimates)])
+#rel_change <- abs(diff(D_estimates) / D_estimates[-length(D_estimates)])
 
 # Show which buffers are within 5% change
-stabilized_idx <- which(rel_change < 0.10) 
-buffers[stabilized_idx + 1]  # +1 because diff shifts index
-optimal_buffer <- buffers[min(stabilized_idx + 1)]
-optimal_buffer
+#stabilized_idx <- which(rel_change < 0.10) 
+#buffers[stabilized_idx + 1]  # +1 because diff shifts index
+#optimal_buffer <- buffers[min(stabilized_idx + 1)]
+#optimal_buffer
 
 #Buffer test for cats.HZ
-buffers <- seq(500, 3500, by = 250)
+#buffers <- seq(500, 3500, by = 250)
 
-buffer_results <- data.frame(
-  buffer = buffers,
-  AIC = NA_real_,
-  logLik = NA_real_
-)
+#buffer_results <- data.frame(
+ # buffer = buffers,
+ # AIC = NA_real_,
+  #logLik = NA_real_
+#)
 
-for (i in seq_along(buffers)) {
-  fit <- update(cats.HZ, buffer = buffers[i])
+#for (i in seq_along(buffers)) {
+ # fit <- update(cats.HZ, buffer = buffers[i])
   
   # store AIC and log-likelihood
-  buffer_results$AIC[i] <- AIC(fit)
-  buffer_results$logLik[i] <- logLik(fit)
-}
+#  buffer_results$AIC[i] <- AIC(fit)
+ # buffer_results$logLik[i] <- logLik(fit)
+#}
 
-buffer_results #going with 3000 m 
+#buffer_results #going with 3000 m 
 
+
+#capture history check 
+summary(ch)
+
+# number of unique detectors per individual
+ch.array <- as.array(ch)
+#potential issue is that there are not many recaptures of individuals across the grid
+
+#n.traps <- apply(ch.array, 1, function(x) sum(rowSums(x) > 0))
+#didnt work -> taking a pause......

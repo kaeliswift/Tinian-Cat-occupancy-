@@ -5,6 +5,7 @@ library(secr)
 library(tidyverse)
 library(lubridate)
 library(sf)
+library(sp)
 
 
 #Make captfile....................................................................
@@ -694,5 +695,134 @@ all_levels <- sort(unique(c(
 landcover[[1]]$habitat <- factor(landcover[[1]]$habitat, levels = all_levels)
 landcover[[2]]$habitat <- factor(landcover[[2]]$habitat, levels = all_levels)
 
+#try 4
+landcover <- make.mask(
+  ch.traps,
+  buffer = 3000,
+  spacing = 100
+)
+
+#session 1
+m1 <- landcover[[1]]
+
+m1_sf <- st_as_sf(data.frame(x=m1$x, y=m1$y),
+                  coords=c("x","y"),
+                  crs=st_crs(veg_sf))
+
+idx1 <- st_intersects(m1_sf, veg_sf)
+
+class1 <- sapply(idx1, function(i)
+  if(length(i)==0) "NoVegData" else veg_sf$CLASS[i[1]]
+)
+
+#session 2
+m2 <- landcover[[2]]
+
+m2_sf <- st_as_sf(data.frame(x=m2$x, y=m2$y),
+                  coords=c("x","y"),
+                  crs=st_crs(veg_sf))
+
+idx2 <- st_intersects(m2_sf, veg_sf)
+
+class2 <- sapply(idx2, function(i)
+  if(length(i)==0) "NoVegData" else veg_sf$CLASS[i[1]]
+)
+#combine into landcover
+covariates(landcover) <- list(
+  data.frame(habitat = class1),
+  data.frame(habitat = class2)
+)
+
+all_levels <- sort(unique(c(class1, class2)))
+
+covariates(landcover)[[1]]$habitat <- factor(class1, levels = all_levels)
+covariates(landcover)[[2]]$habitat <- factor(class2, levels = all_levels)
+
+covariates(landcover)
+head(covariates(landcover)[[1]])
+table(covariates(landcover)[[1]]$habitat)
+    
+#try 5  
+landcover <- make.mask(
+  ch.traps,
+  buffer = 3000,
+  spacing = 100
+)
+
+# session 1
+m1 <- landcover[[1]]
+m1_sf <- st_as_sf(data.frame(x=m1$x, y=m1$y),
+                  coords=c("x","y"),
+                  crs=st_crs(veg_sf))
+
+idx1 <- st_intersects(m1_sf, veg_sf)
+
+class1 <- sapply(idx1, function(i)
+  if(length(i)==0) "NoVegData" else veg_sf$CLASS[i[1]]
+)
+
+# session 2
+m2 <- landcover[[2]]
+m2_sf <- st_as_sf(data.frame(x=m2$x, y=m2$y),
+                  coords=c("x","y"),
+                  crs=st_crs(veg_sf))
+
+idx2 <- st_intersects(m2_sf, veg_sf)
+
+class2 <- sapply(idx2, function(i)
+  if(length(i)==0) "NoVegData" else veg_sf$CLASS[i[1]]
+)
+
+covariates(landcover) <- list(
+  data.frame(habitat = class1),
+  data.frame(habitat = class2)
+)
+
+covariates(landcover) #STILL DID NOT WORK ----> NEED HELP
+
+landcover[1]$habitat
+landcover[2]
+
+str(landcover)
+
+cov_list <- attr(landcover, "covariates")
+attr(landcover, "covariates") <- NULL
+covariates(landcover) <- cov_list
+covariates(landcover)
+shareFactorLevels(landcover)
+verify(landcover)
+str(landcover)
 
 
+#key trial for mask building..........
+mask <- make.mask(ch.traps, 
+                  buffer = 3000, 
+                  spacing = 100,
+                  type = "trapbuffer")
+
+
+#rough estimate of sigma!!
+RPSV(ch,CC=TRUE) #1800 for session 1 & 695 for session 2
+#key  says ~4 times sigma
+#~7200 for session 1 
+#~2780 for session 2
+
+veg_sf <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp")
+
+veg_sf
+
+#adding veg data to mask for D covariate
+vegmask <- addCovariates(object = mask,
+              spatialdata = veg_sf,
+              columns = "CLASS")
+
+str(vegmask)
+
+#adding veg data to ch for g0 and sigma covariates
+#chveg <- addCovariates(object = ch,
+ #                      spatialdata = veg_sf,
+  #                     columns = "CLASS",
+   #                    strict = FALSE)
+
+
+#HELP..............................................

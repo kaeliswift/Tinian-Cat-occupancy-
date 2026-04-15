@@ -479,13 +479,6 @@ covariates(habitat) #class never transferred data w/ polygon
 names(covariates(habitat))
 str(covariates(habitat))
 
-#convert mask to sf points
-mask_sf <- st_as_sf(
-  as.data.frame(habitat),
-  coords = c("x", "y"),
-  crs = st_crs(tinian)
-) #didn't work most likely sessions
-
 str(habitat[[1]]) #habitat is included but hidden w/in
 
 
@@ -500,5 +493,206 @@ veg_sf <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res
 #spatial join
 mask_sf <- st_as_sf(mask_points, coords = c("x","y"), crs = st_crs(veg_sf))
 
-#DIDNT WORK..... CONTINUE ON THIS (think its CLASS name):
-join <- st_join(mask_sf, veg_sf["CLASS.landcover"])
+#DIDN'T WORK..... CONTINUE ON THIS (think its CLASS name):
+head(veg_sf)
+join <- st_join(mask_sf, veg_sf["CLASS"])
+
+#assigning class back into the mask
+#will need to do by session
+#session 1
+mask1_sf <- st_as_sf(data.frame(x = mask1$x, y = mask1$y),
+                     coords = c("x","y"),
+                     crs = st_crs(veg_sf))
+
+idx1 <- st_intersects(mask1_sf, veg_sf)
+
+class1 <- sapply(idx1, function(i) {
+  if (length(i) == 0) return(NA)
+  veg_sf$CLASS[i[1]]
+})
+
+#session 2
+mask2_sf <- st_as_sf(data.frame(x = mask2$x, y = mask2$y),
+                     coords = c("x","y"),
+                     crs = st_crs(veg_sf))
+
+idx2 <- st_intersects(mask2_sf, veg_sf)
+
+class2 <- sapply(idx2, function(i) {
+  if (length(i) == 0) return(NA)
+  veg_sf$CLASS[i[1]]
+})
+
+#joining CLASS back to original mask
+habitat[[1]]$covariates <- data.frame(habitat = class1)
+habitat[[2]]$covariates <- data.frame(habitat = class2)
+
+covariates(habitat)
+covariates(habitat)[[1]]
+covariates(habitat)[[2]]
+
+#try 2: blank mask & then overlay shapefile veg
+landcover <- make.mask(ch.traps, buffer = 3000, spacing = 100)
+
+#session 1
+m1 <- landcover[[1]]
+m1_df <- data.frame(x = m1$x, y = m1$y)
+m1_sf <- st_as_sf(m1_df, coords = c("x","y"), crs = st_crs(veg_sf))
+
+#session 2
+m2 <- landcover[[2]]
+m2_df <- data.frame(x = m2$x, y = m2$y)
+m2_sf <- st_as_sf(m2_df, coords = c("x","y"), crs = st_crs(veg_sf))
+
+#overlay veg
+idx1 <- st_intersects(m1_sf, veg_sf)
+class1 <- sapply(idx1, function(i) {
+  if (length(i) == 0) return(NA)
+  veg_sf$CLASS[i[1]]
+})
+
+idx2 <- st_intersects(m2_sf, veg_sf)
+class2 <- sapply(idx2, function(i) {
+  if (length(i) == 0) return(NA)
+  veg_sf$CLASS[i[1]]
+})
+
+#assign veg covariates back to the mask
+landcover[[1]]$habitat <- class1
+landcover[[2]]$habitat <- class2
+
+head(landcover[[1]]) #bad - failed
+head(landcover[[2]]) #good
+
+#checking matching of shapefiles
+st_crs(veg_sf)
+st_crs(st_as_sf(data.frame(x=landcover[[1]]$x, y=landcover[[1]]$y), coords=c("x","y"), crs=st_crs(veg_sf)))
+
+plot(st_geometry(veg_sf))
+plot(landcover[[1]], add=TRUE, col="red") #session 1 buffer space falls outside of available data
+
+#fixing session 1 issue
+mask1_sf <- st_as_sf(data.frame(x=landcover[[1]]$x,
+                                y=landcover[[1]]$y),
+                     coords=c("x","y"),
+                     crs=st_crs(veg_sf))
+
+idx1 <- st_intersects(mask1_sf, veg_sf)
+
+class1 <- sapply(idx1, function(i) {
+  if (length(i) == 0) {
+    return("NoVegData")   
+  }
+  veg_sf$CLASS[i[1]]
+})
+
+#doing same to session 2
+mask2_sf <- st_as_sf(data.frame(x=landcover[[2]]$x,
+                                y=landcover[[2]]$y),
+                     coords=c("x","y"),
+                     crs=st_crs(veg_sf))
+
+idx2 <- st_intersects(mask2_sf, veg_sf)
+
+class2 <- sapply(idx2, function(i) {
+  if (length(i) == 0) {
+    return("NoVegData")
+  }
+  veg_sf$CLASS[i[1]]
+})
+
+#adding habitat back
+landcover[[1]]$habitat <- class1
+landcover[[2]]$habitat <- class2
+
+#checking
+head(landcover[[1]]) #works now
+head(landcover[[2]]) 
+
+unique(landcover[[1]]$habitat)
+unique(landcover[[2]]$habitat)
+
+sort(table(landcover[[1]]$habitat), decreasing = TRUE)
+sort(table(landcover[[2]]$habitat), decreasing = TRUE)
+
+#check for NAs 
+sum(is.na(landcover[[1]]$habitat))
+sum(is.na(landcover[[2]]$habitat))
+
+#CONSIDER COLLAPSING RARE HABITAT TYPES & CONSTRAINING TO MLA
+secr.fit(ch, mask = landcover, model = list(D ~ habitat)) #did not work....
+
+#diagnosing the issue
+lapply(landcover, function(m) c(length(m$x), length(m$y), nrow(covariates(m))))
+any(!is.finite(landcover[[1]]$x))
+any(!is.finite(landcover[[1]]$y))
+any(!is.finite(landcover[[2]]$x))
+any(!is.finite(landcover[[2]]$y))
+
+
+#try 3
+tinian <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp")
+veg_sf <- tinian
+
+landcover <- make.mask(
+  ch.traps,
+  buffer = 3000,
+  spacing = 100
+)
+#session 1
+m <- landcover[[1]]
+
+m_sf <- st_as_sf(data.frame(x=m$x, y=m$y),
+                 coords=c("x","y"),
+                 crs=st_crs(veg_sf))
+
+idx <- st_intersects(m_sf, veg_sf)
+
+class <- sapply(idx, \(i)
+                if(length(i)==0) "NoVegData" else veg_sf$CLASS[i[1]]
+)
+
+covariates(landcover[[1]]) <- data.frame(habitat = class)
+
+verify(landcover[[1]])
+
+#session 2
+m <- landcover[[2]]
+
+m_sf <- st_as_sf(data.frame(x=m$x, y=m$y),
+                 coords=c("x","y"),
+                 crs=st_crs(veg_sf))
+
+idx <- st_intersects(m_sf, veg_sf)
+
+class <- sapply(idx, \(i)
+                if(length(i)==0) "NoVegData" else veg_sf$CLASS[i[1]]
+)
+
+covariates(landcover[[2]]) <- data.frame(habitat = class)
+
+verify(landcover[[2]])
+
+#trying models
+fit0 <- secr.fit(
+  ch,
+  mask = landcover,
+  model = list(D ~ 1)
+)
+
+#Warning message:
+ # Levels of factor mask covariate(s) differ between sessions - ",
+  #               "use shareFactorLevels() 
+
+#need to share factor levels across sessions
+all_levels <- sort(unique(c(
+  landcover[[1]]$habitat,
+  landcover[[2]]$habitat
+)))
+
+#DIDNT WORK ---> NEED TO IMPROVE THIS
+landcover[[1]]$habitat <- factor(landcover[[1]]$habitat, levels = all_levels)
+landcover[[2]]$habitat <- factor(landcover[[2]]$habitat, levels = all_levels)
+
+
+

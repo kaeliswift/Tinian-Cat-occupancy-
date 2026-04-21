@@ -38,8 +38,8 @@ start_end[10, "Termination"] <- "11/15/2024"
 
 #format datetime of deploy & terminations..........
 start_end <- start_end %>% 
-  mutate(Deployment = mdy_hms(paste(Deployment, "00:00:00"), tz = "UTC"),
-         Termination = mdy_hms(paste(Termination, "23:59:59"), tz = "UTC"))
+  mutate(Deployment = mdy_hms(paste(Deployment, "00:00:00"), tz = "Pacific/Guam"),
+         Termination = mdy_hms(paste(Termination, "23:59:59"), tz = "Pacific/Guam"))
 
 #step 1: extract 1st set of with deploy/termination period
 problem_children <- start_end[c(8,11,19),]
@@ -104,9 +104,9 @@ table(data.clean$Individuals)
 length(unique(data.clean$Individuals)) #47 individuals
 
 #REMOVING INDIVIDUALS W/ ONLY 1 ENCOUNTER
-counts <- table(data.clean$Individuals)
-data.filtered <- data.clean[data.clean$Individuals %in% names(counts[counts > 1]), ]
-length(unique(data.filtered$Individuals)) #26 individuals 
+#counts <- table(data.clean$Individuals)
+#data.filtered <- data.clean[data.clean$Individuals %in% names(counts[counts > 1]), ]
+#length(unique(data.filtered$Individuals)) #26 individuals 
 
 #replacing data w/ individuals with k > 1 encounters 
 data <- data.filtered
@@ -304,4 +304,223 @@ EX.2000
 #compare AICs
 AIC(HN.2000, HZ.2000, EX.2000) #buffer = 2000, worse AICs HZ is still the best model
 AIC(cats.HN, cats.HZ, cats.EX) #buffer = 3000
-#are these comparable?
+#are these comparable? -> NO models w/ different 
+
+
+#Attempting vegetation mask again...............................................
+veg_sf <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp") %>%
+  st_transform(crs = st_crs(traps.sf))
+plot(veg_sf) #can skip this, just shows you avaialable data
+
+landcover <- make.mask(ch.traps, buffer = 3000, spacing = 100)
+
+vegmask <- addCovariates(
+  object = landcover,
+  spatialdata = veg_sf,
+  columns = "CLASS"
+)
+
+vegmask <- shareFactorLevels(vegmask) #issue w/ NAs
+verify(vegmask)
+
+#Version 1: NAs labeled as NoVeg and no clipping to veg extent....................
+# fix NA issue
+covariates(vegmask) <- lapply(covariates(vegmask), function(df) {
+  # convert to character first (simplest + safest)
+  df$CLASS <- as.character(df$CLASS)
+  
+  # replace NA
+  df$CLASS[is.na(df$CLASS)] <- "NoVegData"
+  
+  # convert back to factor
+  df$CLASS <- factor(df$CLASS)
+  
+  return(df)
+})
+
+vegmask <- shareFactorLevels(vegmask)
+verify(vegmask)
+
+
+#Version 2: clipped to veg extent................................. 
+veg_sp <- as(veg_sf, "Spatial")
+
+vegext <- make.mask(
+  ch.traps,
+  buffer = 3000,
+  spacing = 100,
+  type = "polygon",
+  poly = veg_sp
+)
+
+vegext <- addCovariates(
+  object = vegext,
+  spatialdata = veg_sf,
+  columns = "CLASS"
+)
+
+vegext <- shareFactorLevels(vegext)
+verify(vegext) #nice
+
+#Trying out fits of models with vegmask and vegext................................
+#Version 1: Veg mask ~~~~~~~~~
+# Null model
+fit1_null <- secr.fit(
+  ch,
+  mask = vegmask,
+  model = list(D ~ 1, g0 ~ 1, sigma ~ 1),
+  detectfn = 1 #HZ was model w/ lowest AIC earlier
+)
+
+# Habitat model (density varies by vegetation)
+fit1_Dhab <- secr.fit(
+  ch,
+  mask = vegmask,
+  model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1),
+  detectfn = 1
+) #issue here
+
+#checking covariates actually exist
+covariates(vegmask) #exists BUT a lot of NAs
+
+#forcing CLASS correction for NAs
+covariates(vegmask) <- lapply(covariates(vegmask), function(df) {
+  
+  # extract and force to character
+  cls <- as.character(df$CLASS)
+  
+  # replace ALL missing values
+  cls[is.na(cls) | cls == "" | cls == "NA"] <- "NoVegData"
+  
+  # trim whitespace (important)
+  cls <- trimws(cls)
+  
+  # rebuild factor cleanly
+  df$CLASS <- factor(cls)
+  
+  return(df)
+})
+
+vegmask <- shareFactorLevels(vegmask)
+verify(vegmask)
+
+#check of CLASS
+lapply(covariates(vegmask), function(df) {
+  list(
+    n_NA = sum(is.na(df$CLASS)),
+    table = table(df$CLASS)
+  )
+}) #STILL A LOT OF NAs ---> MOVE ON TO vegext
+
+
+#compare models 
+AIC(fit1_null, fit1_Dhab) #won't work
+
+#Version 2: Veg extent ~~~~~~~~~~~~
+# Null model
+fit2_null <- secr.fit(
+  ch,
+  mask = vegext,
+  model = list(D ~ 1, g0 ~ 1, sigma ~ 1)
+)
+
+# Habitat model
+fit2_Dhab <- secr.fit(
+  ch,
+  mask = vegext,
+  model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1)
+)
+
+#compare models
+AIC(fit2_null, fit2_Dhab)
+
+
+predict(fit2_Dhab)
+predict(fit2_Dhab)$D
+
+coef(fit2_Dhab)
+summary(fit2_Dhab)
+
+
+#TO DO 4/21/26:
+# 1. check what poly = does
+  #GOOD - instead of creating a circular buffer around traps, the mask is clipped to your habitat shapefile geometry.
+  #buffer defines potential movement space
+  #poly defines habitat-constrained state space
+
+# 2. reclassify down to ~5 (focus on what is at cams)
+
+# 3. make NA adjacent class type or mask/remove them
+# 4. put cats that were only captured once back in!
+# 5. plot density vs buffer size (500, 1000, 15000 etc.)
+# 6. find distance from edge of island to camera trap array/create plot?
+
+
+#Creating vegext with paired down CLASS............................................
+#look at CLASS at cam trap locations
+table(traps$CLASS.landcover) 
+#includes: Casuarina Thicket, 
+#Mixed Introduced Forest, 
+#Other Shrub and Grass, 
+#Leucaena Leucocephala (Tangantangan), 
+#Native Limestone Forest
+
+#covariates in vegext
+#session 1
+table(covariates(vegext)[[1]]$CLASS)
+#session 2
+table(covariates(vegext)[[2]]$CLASS)
+
+#pairing down CLASS in vegext -----> DID NOT WORK ---> WILL TAKE A BREAK!!!
+recode_CLASS <- function(x) {
+  
+  x <- trimws(as.character(x))
+  
+  x[is.na(x) | x == "" | x == "NA"] <- "NoVegData"
+  
+  x[x %in% c("Native Limestone Forest")] <- "NativeForest"
+  x[x %in% c("Casuarina Thicket")] <- "IronwoodForest"
+  x[x %in% c("Leucaena Leucocephala (Tangantangan)")] <- "Tangantangan"
+  
+  x[x %in% c("Mixed Introduced Forest",
+             "Agroforest",
+             "Agroforest -- Coconut")] <- "IntroducedForest"
+  
+  x[x %in% c("Other Shrub and Grass",
+             "Cropland")] <- "OpenShrubGrass"
+  
+  x[x %in% c("Urban and Built-up",
+             "Urban Vegetation")] <- "Urban"
+  
+  x[x %in% c("Strand",
+             "Barren/Sandy Beach/Bare Rocks",
+             "Wetland")] <- "Coastal"
+  
+  x
+}
+
+covariates(vegext) <- lapply(covariates(vegext), function(df) {
+  df$CLASS <- recode_CLASS(df$CLASS)
+  df
+})
+
+all_levels <- sort(unique(unlist(lapply(covariates(vegext), function(df) {
+  unique(df$CLASS)
+}))))
+
+covariates(vegext) <- lapply(covariates(vegext), function(df) {
+  df$CLASS <- factor(df$CLASS, levels = all_levels)
+  df
+})
+
+lapply(covariates(vegext), function(df) table(df$CLASS))
+
+unique(unlist(lapply(covariates(vegext), function(df) as.character(df$CLASS))))
+vegext <- shareFactorLevels(vegext)
+verify(vegext)
+
+table(covariates(vegext)[[1]]$CLASS)
+table(covariates(vegext)[[2]]$CLASS)
+
+st_crs(veg_sf)
+st_crs(traps.sf)

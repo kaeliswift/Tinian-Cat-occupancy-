@@ -38,8 +38,8 @@ start_end[10, "Termination"] <- "11/15/2024"
 
 #format datetime of deploy & terminations..........
 start_end <- start_end %>% 
-  mutate(Deployment = mdy_hms(paste(Deployment, "00:00:00"), tz = "UTC"),
-         Termination = mdy_hms(paste(Termination, "23:59:59"), tz = "UTC"))
+  mutate(Deployment = mdy_hms(paste(Deployment, "00:00:00"), tz = "Pacific/Guam"),
+         Termination = mdy_hms(paste(Termination, "23:59:59"), tz = "Pacific/Guam"))
 
 #step 1: extract 1st set of with deploy/termination period
 problem_children <- start_end[c(8,11,19),]
@@ -306,7 +306,7 @@ EX.2000
 #compare AICs
 AIC(HN.2000, HZ.2000, EX.2000) #buffer = 2000, worse AICs HZ is still the best model
 AIC(cats.HN, cats.HZ, cats.EX) #buffer = 3000
-#are these comparable?
+#are these comparable? --> AICs are NOT comparable w/ different buffers
 
 #Playing around with different buffer sizes ########################################
 

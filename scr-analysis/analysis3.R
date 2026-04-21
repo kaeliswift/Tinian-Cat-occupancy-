@@ -233,3 +233,75 @@ ch.traps <- traps(ch)
 #Look at ch
 summary(ch)
 
+#run the null model with a half normal detection
+cats.HN<-secr.fit(ch, buffer=3000)
+
+cats.HN
+
+#get D, g0, and sigma on the real line (back-transformed from the link function)
+predict(cats.HN)
+
+#calculate the confidence interval for a parameter
+confint(cats.HN, "D") #possible session error???
+
+#what buffer should I use?
+detpar <-  list(g0 = 0.27, sigma = 217)  #info from cats.Hn
+str(detpar)
+#suggest.buffer(ch.traps, "halfnormal", detpar, 6)  #6 occasions
+#ISSUE --> could it be sessions???
+ch.ses1 <- subset(ch, sessions = 1)
+suggest.buffer(traps(ch.ses1), "halfnormal", detpar, 6)  #6 occasions
+#720 m seems small???
+ch.ses2 <- subset(ch, sessions = 2)
+suggest.buffer(traps(ch.ses2), "halfnormal", detpar, 6)  #6 occasions
+#757 M also small???
+
+#you can also look at some metrics of movement within the dataset
+#dbar is the mean distance between consecutive capture locations, 
+#pooled over individuals (e.g. Efford 2004). 
+#MMDM (for ‘Mean Maximum Distance Moved’) is the average maximum distance \
+#between detections of each individual 
+
+dbar(ch) #2089 for session 1 & 821 for session 2
+MMDM(ch, min.recapt = 1, full = FALSE)
+#3536 for session 1 & 1599 for session 2
+
+##now let's look at a few other detection functions
+cats.HZ <- secr.fit(ch, buffer = 3000, detectfn = 1)
+cats.HZ
+cats.EX <- secr.fit(ch, buffer = 3000, detectfn = 2)
+cats.EX
+
+## plot fitted detection functions
+xv <- seq(0,800,10)
+plot(cats.EX, xval = xv, limits = FALSE, lty = 2)
+plot(cats.HN, xval = xv, limits = FALSE, lty = 1, add = TRUE)
+plot(cats.HZ, xval = xv, limits = FALSE, lty = 3, add = TRUE)
+
+#compare with AIC
+aic.tab=AIC(cats.HN, cats.HZ, cats.EX)
+aic.tab #cats.HZ has lowest AIC
+
+cats.HZ #sigma = 587 
+#sigma x 3 = 1761 meters
+
+esa.plot(cats.HZ)
+?esa.plot #being phased out
+
+predict(cats.EX)
+predict(cats.HN)
+predict(cats.HZ)
+
+
+#changing buffer to 2000
+HN.2000 <-secr.fit(ch, buffer=2000, detectfn = 0)
+HN.2000
+HZ.2000 <- secr.fit(ch, buffer = 2000, detectfn = 1)
+HZ.2000
+EX.2000 <- secr.fit(ch, buffer = 2000, detectfn = 2)
+EX.2000
+
+#compare AICs
+AIC(HN.2000, HZ.2000, EX.2000) #buffer = 2000, worse AICs HZ is still the best model
+AIC(cats.HN, cats.HZ, cats.EX) #buffer = 3000
+#are these comparable?

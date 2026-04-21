@@ -251,7 +251,7 @@ cats.test<-secr.fit(ch, buffer=100) #I feel like this is the similar as line 225
 #what buffer should I use?
 detpar <-  list(g0 = 0.27, sigma = 217)  #info from stoatHN1
 str(detpar)
-suggest.buffer(ch.traps, "halfnormal", detpar, 6)  #6 occasions
+#suggest.buffer(ch.traps, "halfnormal", detpar, 6)  #6 occasions
 #ISSUE --> could it be sessions???
 ch.ses1 <- subset(ch, sessions = 1)
 suggest.buffer(traps(ch.ses1), "halfnormal", detpar, 6)  #6 occasions
@@ -292,7 +292,7 @@ cats.HZ #sigma = 587
 esa.plot(cats.HZ)
 ?esa.plot #being phased out
 
-suggest.buffer(cats.HZ)
+#suggest.buffer(cats.HZ)
 
 
 #changing buffer to 2000
@@ -304,7 +304,7 @@ EX.2000 <- secr.fit(ch, buffer = 2000, detectfn = 2)
 EX.2000
 
 #compare AICs
-AIC(HN.2000, HZ.2000, Ex.2000) #buffer = 2000, worse AICs HZ is still the best model
+AIC(HN.2000, HZ.2000, EX.2000) #buffer = 2000, worse AICs HZ is still the best model
 AIC(cats.HN, cats.HZ, cats.EX) #buffer = 3000
 #are these comparable?
 
@@ -441,7 +441,6 @@ tinian <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res
 plot(tinian)
 
 #converting to a polygon
-library(sp)
 tinian_sp <- as(tinian, "Spatial")
 
 #are traps formatted properly?

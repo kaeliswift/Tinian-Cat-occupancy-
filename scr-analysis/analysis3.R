@@ -310,7 +310,7 @@ AIC(cats.HN, cats.HZ, cats.EX) #buffer = 3000
 #Attempting vegetation mask again...............................................
 veg_sf <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp") %>%
   st_transform(crs = st_crs(traps.sf))
-plot(veg_sf) #can skip this, just shows you avaialable data
+plot(veg_sf) #can skip this, just shows you available data
 
 landcover <- make.mask(ch.traps, buffer = 3000, spacing = 100)
 
@@ -325,21 +325,21 @@ verify(vegmask)
 
 #Version 1: NAs labeled as NoVeg and no clipping to veg extent....................
 # fix NA issue
-covariates(vegmask) <- lapply(covariates(vegmask), function(df) {
+#covariates(vegmask) <- lapply(covariates(vegmask), function(df) {
   # convert to character first (simplest + safest)
-  df$CLASS <- as.character(df$CLASS)
+ # df$CLASS <- as.character(df$CLASS)
   
   # replace NA
-  df$CLASS[is.na(df$CLASS)] <- "NoVegData"
+  #df$CLASS[is.na(df$CLASS)] <- "NoVegData"
   
   # convert back to factor
-  df$CLASS <- factor(df$CLASS)
+#  df$CLASS <- factor(df$CLASS)
   
-  return(df)
-})
+ # return(df)
+#})
 
-vegmask <- shareFactorLevels(vegmask)
-verify(vegmask)
+#vegmask <- shareFactorLevels(vegmask)
+#verify(vegmask)
 
 
 #Version 2: clipped to veg extent................................. 
@@ -365,96 +365,96 @@ verify(vegext) #nice
 #Trying out fits of models with vegmask and vegext................................
 #Version 1: Veg mask ~~~~~~~~~
 # Null model
-fit1_null <- secr.fit(
-  ch,
-  mask = vegmask,
-  model = list(D ~ 1, g0 ~ 1, sigma ~ 1),
-  detectfn = 1 #HZ was model w/ lowest AIC earlier
-)
+#fit1_null <- secr.fit(
+ # ch,
+  #mask = vegmask,
+  #model = list(D ~ 1, g0 ~ 1, sigma ~ 1),
+#  detectfn = 1 #HZ was model w/ lowest AIC earlier
+#)
 
 # Habitat model (density varies by vegetation)
-fit1_Dhab <- secr.fit(
-  ch,
-  mask = vegmask,
-  model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1),
-  detectfn = 1
-) #issue here
+#fit1_Dhab <- secr.fit(
+ # ch,
+  #mask = vegmask,
+  #model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1),
+  #detectfn = 1
+#) #issue here
 
 #checking covariates actually exist
-covariates(vegmask) #exists BUT a lot of NAs
+#covariates(vegmask) #exists BUT a lot of NAs
 
 #forcing CLASS correction for NAs
-covariates(vegmask) <- lapply(covariates(vegmask), function(df) {
+#covariates(vegmask) <- lapply(covariates(vegmask), function(df) {
   
   # extract and force to character
-  cls <- as.character(df$CLASS)
+ # cls <- as.character(df$CLASS)
   
   # replace ALL missing values
-  cls[is.na(cls) | cls == "" | cls == "NA"] <- "NoVegData"
+  #cls[is.na(cls) | cls == "" | cls == "NA"] <- "NoVegData"
   
   # trim whitespace (important)
-  cls <- trimws(cls)
+#  cls <- trimws(cls)
   
   # rebuild factor cleanly
-  df$CLASS <- factor(cls)
+ # df$CLASS <- factor(cls)
   
-  return(df)
-})
+  #return(df)
+#})
 
-vegmask <- shareFactorLevels(vegmask)
-verify(vegmask)
+#vegmask <- shareFactorLevels(vegmask)
+#verify(vegmask)
 
 #check of CLASS
-lapply(covariates(vegmask), function(df) {
-  list(
-    n_NA = sum(is.na(df$CLASS)),
-    table = table(df$CLASS)
-  )
-}) #STILL A LOT OF NAs ---> MOVE ON TO vegext
+#lapply(covariates(vegmask), function(df) {
+ # list(
+  #  n_NA = sum(is.na(df$CLASS)),
+   # table = table(df$CLASS)
+  #)
+#}) #STILL A LOT OF NAs ---> MOVE ON TO vegext
 
 
 #compare models 
-AIC(fit1_null, fit1_Dhab) #won't work
+#AIC(fit1_null, fit1_Dhab) #won't work
 
 #Version 2: Veg extent ~~~~~~~~~~~~
 # Null model
-fit2_null <- secr.fit(
-  ch,
-  mask = vegext,
-  model = list(D ~ 1, g0 ~ 1, sigma ~ 1)
-)
+#fit2_null <- secr.fit(
+ # ch,
+  #mask = vegext,
+#  model = list(D ~ 1, g0 ~ 1, sigma ~ 1)
+#)
 
 # Habitat model
-fit2_Dhab <- secr.fit(
-  ch,
-  mask = vegext,
-  model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1)
-)
+#fit2_Dhab <- secr.fit(
+ # ch,
+  #mask = vegext,
+  #model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1)
+#) #WARNING --- VERY SLOW & NOT DESIRED CLASSES
 
 #compare models
-AIC(fit2_null, fit2_Dhab)
+#AIC(fit2_null, fit2_Dhab)
 
 
-predict(fit2_Dhab)
-predict(fit2_Dhab)$D
+#predict(fit2_Dhab)
+#predict(fit2_Dhab)$D
 
-coef(fit2_Dhab)
-summary(fit2_Dhab)
+#coef(fit2_Dhab)
+#summary(fit2_Dhab)
 
-
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #TO DO 4/21/26:
 # 1. check what poly = does
   #GOOD - instead of creating a circular buffer around traps, the mask is clipped to your habitat shapefile geometry.
   #buffer defines potential movement space
   #poly defines habitat-constrained state space
 
-# 2. reclassify down to ~5 (focus on what is at cams)
+# 2. reclassify down to ~5 (focus on what is at cams) -- GOOD, may need to change categories
 
 # 3. make NA adjacent class type or mask/remove them
-# 4. put cats that were only captured once back in!
+# 4. put cats that were only captured once back in! --- GOOD
 # 5. plot density vs buffer size (500, 1000, 15000 etc.)
 # 6. find distance from edge of island to camera trap array/create plot?
-
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #Creating vegext with paired down CLASS............................................
 #look at CLASS at cam trap locations
@@ -471,7 +471,7 @@ table(covariates(vegext)[[1]]$CLASS)
 #session 2
 table(covariates(vegext)[[2]]$CLASS)
 
-#pairing down CLASS in vegext -----> DID NOT WORK ---> WILL TAKE A BREAK!!!
+#ok.... let's try a different approach --> reclassify veg_sf & then make vegext
 recode_CLASS <- function(x) {
   
   x <- trimws(as.character(x))
@@ -499,28 +499,124 @@ recode_CLASS <- function(x) {
   x
 }
 
-covariates(vegext) <- lapply(covariates(vegext), function(df) {
-  df$CLASS <- recode_CLASS(df$CLASS)
-  df
-})
+table(veg_sf$CLASS) #old version 
 
-all_levels <- sort(unique(unlist(lapply(covariates(vegext), function(df) {
-  unique(df$CLASS)
-}))))
+veg_sf$CLASS <- recode_CLASS(veg_sf$CLASS)
 
-covariates(vegext) <- lapply(covariates(vegext), function(df) {
-  df$CLASS <- factor(df$CLASS, levels = all_levels)
-  df
-})
+table(veg_sf$CLASS) #new version -- looks good!!
 
-lapply(covariates(vegext), function(df) table(df$CLASS))
+#remaking vegext
+veg_sp <- as(veg_sf, "Spatial")
 
-unique(unlist(lapply(covariates(vegext), function(df) as.character(df$CLASS))))
+vegext <- make.mask(
+  ch.traps,
+  buffer = 3000, #MAY NEED TO CHANGE THIS 
+  spacing = 100,
+  type = "polygon",
+  poly = veg_sp
+)
+
+vegext <- addCovariates(
+  object = vegext,
+  spatialdata = veg_sf,
+  columns = "CLASS"
+)
+
 vegext <- shareFactorLevels(vegext)
-verify(vegext)
+verify(vegext) #nice
 
+#covariates in vegext
+#session 1
 table(covariates(vegext)[[1]]$CLASS)
-table(covariates(vegext)[[2]]$CLASS)
+#session 2
+table(covariates(vegext)[[2]]$CLASS) #good
 
-st_crs(veg_sf)
-st_crs(traps.sf)
+
+#Version 2: NEW Veg extent models~~~~~~~~~~~~
+# Null model
+fit_null <- secr.fit(
+  ch,
+  mask = vegext,
+  model = list(D ~ 1, g0 ~ 1, sigma ~ 1)
+)
+
+# Habitat model
+fit_Dhab <- secr.fit(
+  ch,
+  mask = vegext,
+  model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1)
+) #WARNING --- VERY SLOW 
+
+#compare models
+AIC(fit_null, fit_Dhab)
+
+predict(fit_null)
+
+predict(fit_Dhab)
+predict(fit_Dhab)$D
+
+coef(fit_Dhab)
+summary(fit_Dhab)
+
+#OK... next moves before models......
+#graph buffer sizes & estimates
+#decide on final buffer
+
+#Exploring buffer sizes
+buffers <- c(500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000) #checking 500 m to 5 km 
+
+#THIS WILL TAKE A LOT OF TIME 
+
+fits <- lapply(buffers, function(b) {
+secr.fit(ch, buffer = b)}) #fitting all the buffers
+
+#checking if D estimate stabilizes
+
+#session 1
+sapply(fits, function(fit) {
+derived(fit)[[1]]["D","estimate"]})
+#session 2 
+sapply(fits, function(fit) {
+derived(fit)[[2]]["D","estimate"]})
+
+#both sessions 
+sapply(fits, function(fit) {sapply(derived(fit), function(x) x["D","estimate"])})
+
+#graphing
+D_values <- sapply(fits, function(fit) {
+sapply(derived(fit), function(x) x["D","estimate"])
+})
+
+matplot(buffers, t(D_values), type = "b", pch = 1:2, col = 1:2,
+        xlab = "Buffer (m)", ylab = "D estimate", lty = 1:2)
+legend("topright", legend=c("Session 1","Session 2"), pch=1:2, lty=1:2)
+
+
+#stabilized buffer
+# Calculate relative change between successive D estimates
+#rel_change <- abs(diff(D_estimates) / D_estimates[-length(D_estimates)])
+
+# Show which buffers are within 5% change
+#stabilized_idx <- which(rel_change < 0.10) 
+#buffers[stabilized_idx + 1]  # +1 because diff shifts index
+#optimal_buffer <- buffers[min(stabilized_idx + 1)]
+#optimal_buffer
+
+#Buffer test for cats.HZ
+#buffers <- seq(500, 3500, by = 250)
+
+#buffer_results <- data.frame(
+# buffer = buffers,
+# AIC = NA_real_,
+#logLik = NA_real_
+#)
+
+#for (i in seq_along(buffers)) {
+# fit <- update(cats.HZ, buffer = buffers[i])
+
+# store AIC and log-likelihood
+#  buffer_results$AIC[i] <- AIC(fit)
+# buffer_results$logLik[i] <- logLik(fit)
+#}
+
+#buffer_results #going with 3000 m 

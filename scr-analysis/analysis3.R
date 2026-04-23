@@ -1,11 +1,13 @@
 #Cleaned version of analysis2
-#4/20/26
+#4/22/26
 
 library(secr)
 library(tidyverse)
 library(lubridate)
 library(sf)
 library(sp)
+library(ggplot2)
+
 
 #Formatting of data ##############################################################
 #Make captfile....................................................................
@@ -456,6 +458,109 @@ verify(vegext) #nice
 # 6. find distance from edge of island to camera trap array/create plot?
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+#Checking D estimates & changes in buffer size............................. 
+#OK... next moves before models......
+#graph buffer sizes & estimates
+#decide on final buffer
+
+#Exploring buffer sizes
+buffers <- seq(500, 4000, by = 500) #checking 500 m to 4 km 
+
+fits <- lapply(buffers, function(b) { #THIS WILL TAKE A LOT OF TIME 
+  
+  mask_b <- make.mask(
+    traps(ch),
+    buffer = b,
+    spacing = 100,
+    type = "polygon",
+    poly = veg_sp
+  )
+  
+  secr.fit(
+    ch,
+    mask = mask_b,
+    detectfn = 1   # hazard rate
+  )
+})
+
+#extract density values (D)
+D_values <- sapply(fits, function(fit) {
+  sapply(derived(fit), function(x) x["D","estimate"])
+})
+
+#plot
+library(tidyverse)
+
+D_df <- as.data.frame(t(D_values))
+colnames(D_df) <- c("Session1", "Session2")
+
+D_df$buffer <- buffers
+
+D_long <- D_df %>%
+  pivot_longer(cols = starts_with("Session"),
+               names_to = "Session",
+               values_to = "D")
+
+ggplot(D_long, aes(x = buffer, y = D, color = Session)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Density vs Buffer Size",
+       x = "Buffer (m)",
+       y = "Density (D)") +
+  theme_minimal()
+
+ggplot(D_long, aes(x = buffer, y = D)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~Session) +
+  labs(title = "Density vs Buffer Size",
+       x = "Buffer (m)",
+       y = "Density (D)") +
+  theme_minimal()
+
+#separate session plots: PAY CLOSE ATTENTION TO Y-VALUES
+ggplot(subset(D_long, Session == "Session1"),
+       aes(x = buffer, y = D)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Session 1: Density vs Buffer Size",
+       x = "Buffer (m)",
+       y = "Density (D)") +
+  theme_minimal()
+
+ggplot(subset(D_long, Session == "Session2"),
+       aes(x = buffer, y = D)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Session 2: Density vs Buffer Size",
+       x = "Buffer (m)",
+       y = "Density (D)") +
+  theme_minimal()
+
+#fits <- lapply(buffers, function(b) {
+ # secr.fit(ch, buffer = b)}) #fitting all the buffers
+
+#checking if D estimate stabilizes
+
+#session 1
+sapply(fits, function(fit) {
+  derived(fit)[[1]]["D","estimate"]})
+#session 2 
+sapply(fits, function(fit) {
+  derived(fit)[[2]]["D","estimate"]})
+
+#both sessions 
+sapply(fits, function(fit) {sapply(derived(fit), function(x) x["D","estimate"])})
+
+#graphing
+D_values <- sapply(fits, function(fit) {
+  sapply(derived(fit), function(x) x["D","estimate"])
+})
+
+matplot(buffers, t(D_values), type = "b", pch = 1:2, col = 1:2,
+        xlab = "Buffer (m)", ylab = "D estimate", lty = 1:2)
+legend("topright", legend=c("Session 1","Session 2"), pch=1:2, lty=1:2)
+
 #Creating vegext with paired down CLASS............................................
 #look at CLASS at cam trap locations
 table(traps$CLASS.landcover) 
@@ -510,7 +615,7 @@ veg_sp <- as(veg_sf, "Spatial")
 
 vegext <- make.mask(
   ch.traps,
-  buffer = 3000, #MAY NEED TO CHANGE THIS 
+  buffer = 2000, #MAY NEED TO CHANGE THIS 
   spacing = 100,
   type = "polygon",
   poly = veg_sp
@@ -558,65 +663,113 @@ predict(fit_Dhab)$D
 coef(fit_Dhab)
 summary(fit_Dhab)
 
-#OK... next moves before models......
-#graph buffer sizes & estimates
-#decide on final buffer
+#Checking for distance from edge of island to camera array.............................
+island_boundary <- st_boundary(st_union(veg_sf))
+plot(island_boundary)
 
-#Exploring buffer sizes
-buffers <- c(500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000) #checking 500 m to 5 km 
+traps.sf <- st_as_sf(traps, coords = c("x", "y"), crs = 32655)
 
-#THIS WILL TAKE A LOT OF TIME 
+dist_matrix <- st_distance(traps.sf, island_boundary) #in meters
 
-fits <- lapply(buffers, function(b) {
-secr.fit(ch, buffer = b)}) #fitting all the buffers
+min_dist_traps <- apply(dist_matrix, 1, min)
 
-#checking if D estimate stabilizes
+min(min_dist_traps)      # 80 m closest trap to edge
+max(min_dist_traps)      # 3107 m furthest trap from edge
+mean(min_dist_traps)     # 1310 m average distance
 
-#session 1
-sapply(fits, function(fit) {
-derived(fit)[[1]]["D","estimate"]})
-#session 2 
-sapply(fits, function(fit) {
-derived(fit)[[2]]["D","estimate"]})
+plot(island_boundary, col = "black")
+plot(traps.sf, add = TRUE)
 
-#both sessions 
-sapply(fits, function(fit) {sapply(derived(fit), function(x) x["D","estimate"])})
+hist(min_dist_traps,
+     main = "Distance from traps to island edge",
+     xlab = "Distance (meters)")
 
-#graphing
-D_values <- sapply(fits, function(fit) {
-sapply(derived(fit), function(x) x["D","estimate"])
+#distance from array centroid to edge
+array_centroid <- st_centroid(st_union(traps.sf))
+st_distance(array_centroid, island_boundary) #1967 m 
+
+#ploting buffer size and island edge
+array_center <- st_centroid(st_union(traps.sf))
+
+buffers <- c(500, 1000, 1500, 2000, 2500, 3000)
+
+buffer_list <- lapply(buffers, function(b) {
+  st_buffer(array_center, dist = b)
 })
 
-matplot(buffers, t(D_values), type = "b", pch = 1:2, col = 1:2,
-        xlab = "Buffer (m)", ylab = "D estimate", lty = 1:2)
-legend("topright", legend=c("Session 1","Session 2"), pch=1:2, lty=1:2)
+buffer_sf <- do.call(rbind, lapply(seq_along(buffer_list), function(i) {
+  st_sf(distance = buffers[i], geometry = buffer_list[[i]])
+}))
 
 
-#stabilized buffer
-# Calculate relative change between successive D estimates
-#rel_change <- abs(diff(D_estimates) / D_estimates[-length(D_estimates)])
+ggplot() +
+  geom_sf(data = island_boundary, color = "black") +
+  geom_sf(data = buffer_sf, aes(color = as.factor(distance)), fill = NA) +
+  geom_sf(data = traps.sf, color = "grey", size = 2) +
+  geom_sf(data = array_center, color = "red", size = 3) +
+  labs(color = "Buffer (m)",
+       title = "Camera Trap Array Buffers vs Island Edge") +
+  theme_minimal()
 
-# Show which buffers are within 5% change
-#stabilized_idx <- which(rel_change < 0.10) 
-#buffers[stabilized_idx + 1]  # +1 because diff shifts index
-#optimal_buffer <- buffers[min(stabilized_idx + 1)]
-#optimal_buffer
+#plotting trap buffers
+buffers <- c(500, 1000, 2000, 3000)
 
-#Buffer test for cats.HZ
-#buffers <- seq(500, 3500, by = 250)
+trap_buffers <- lapply(buffers, function(b) {
+  st_buffer(traps.sf, dist = b) %>%
+    mutate(buffer_m = b)
+})
+trap_buffers_sf <- do.call(rbind, trap_buffers)
 
-#buffer_results <- data.frame(
-# buffer = buffers,
-# AIC = NA_real_,
-#logLik = NA_real_
-#)
+ggplot() +
+  geom_sf(data = island_boundary, color = "black") +
+  geom_sf(data = trap_buffers_sf,
+          aes(color = as.factor(buffer_m)),
+          fill = NA,
+          alpha = 0.4) +
+  geom_sf(data = traps.sf, color = "black", size = 1.5) +
+  labs(color = "Buffer (m)",
+       title = "Buffers Around Each Camera Trap") +
+  theme_minimal()
 
-#for (i in seq_along(buffers)) {
-# fit <- update(cats.HZ, buffer = buffers[i])
+#plotting w/ buffers clipped to island boundary
+buffers_plot <- c(500, 1500, 3000)
+trap_buffers_plot <- lapply(buffers_plot, function(b) {
+  st_buffer(traps.sf, dist = b) %>%
+    mutate(buffer_m = b)
+})
 
-# store AIC and log-likelihood
-#  buffer_results$AIC[i] <- AIC(fit)
-# buffer_results$logLik[i] <- logLik(fit)
-#}
+trap_buffers_plot_sf <- do.call(rbind, trap_buffers_plot)
+trap_buffers_clipped <- st_intersection(trap_buffers_plot_sf, veg_sf)
 
-#buffer_results #going with 3000 m 
+ggplot() +
+  geom_sf(data = island_boundary, color = "black") +
+  geom_sf(data = trap_buffers_clipped,
+          aes(color = as.factor(buffer_m)),
+          fill = NA,
+          linewidth = 0.3) +
+  geom_sf(data = traps.sf, color = "black", size = 2) +
+  labs(color = "Buffer (m)",
+       title = "Trap Buffers Clipped to Island",
+       subtitle = "Explains why density stabilizes across buffer sizes") +
+  theme_minimal()
+
+trap_buffers_plot <- lapply(buffers_plot, function(b) {
+  st_buffer(traps.sf, dist = b) %>%
+    mutate(buffer_m = b)
+})
+
+trap_buffers_plot_sf <- do.call(rbind, trap_buffers_plot)
+
+trap_buffers_clipped <- st_intersection(trap_buffers_plot_sf, veg_sf)
+
+ggplot() +
+  geom_sf(data = island_boundary, color = "black") +
+  geom_sf(data = trap_buffers_clipped,
+          fill = NA,
+          color = "blue",
+          linewidth = 0.3) +
+  geom_sf(data = traps.sf, color = "black", size = 2) +
+  facet_wrap(~buffer_m) +
+  labs(title = "Trap Buffers Clipped to Island",
+       subtitle = "Each panel shows a different buffer size") +
+  theme_minimal()

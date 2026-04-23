@@ -1,5 +1,5 @@
-#Cleaned version of analysis2
-#4/22/26
+#Cleaned version of analysis2 with models
+#4/23/26
 
 library(secr)
 library(tidyverse)
@@ -308,157 +308,7 @@ AIC(HN.2000, HZ.2000, EX.2000) #buffer = 2000, worse AICs HZ is still the best m
 AIC(cats.HN, cats.HZ, cats.EX) #buffer = 3000
 #are these comparable? -> NO models w/ different 
 
-
-#Attempting vegetation mask again...............................................
-veg_sf <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp") %>%
-  st_transform(crs = st_crs(traps.sf))
-plot(veg_sf) #can skip this, just shows you available data
-
-landcover <- make.mask(ch.traps, buffer = 3000, spacing = 100)
-
-vegmask <- addCovariates(
-  object = landcover,
-  spatialdata = veg_sf,
-  columns = "CLASS"
-)
-
-vegmask <- shareFactorLevels(vegmask) #issue w/ NAs
-verify(vegmask)
-
-#Version 1: NAs labeled as NoVeg and no clipping to veg extent....................
-# fix NA issue
-#covariates(vegmask) <- lapply(covariates(vegmask), function(df) {
-  # convert to character first (simplest + safest)
- # df$CLASS <- as.character(df$CLASS)
-  
-  # replace NA
-  #df$CLASS[is.na(df$CLASS)] <- "NoVegData"
-  
-  # convert back to factor
-#  df$CLASS <- factor(df$CLASS)
-  
- # return(df)
-#})
-
-#vegmask <- shareFactorLevels(vegmask)
-#verify(vegmask)
-
-
-#Version 2: clipped to veg extent................................. 
-veg_sp <- as(veg_sf, "Spatial")
-
-vegext <- make.mask(
-  ch.traps,
-  buffer = 3000,
-  spacing = 100,
-  type = "polygon",
-  poly = veg_sp
-)
-
-vegext <- addCovariates(
-  object = vegext,
-  spatialdata = veg_sf,
-  columns = "CLASS"
-)
-
-vegext <- shareFactorLevels(vegext)
-verify(vegext) #nice
-
-#Trying out fits of models with vegmask and vegext................................
-#Version 1: Veg mask ~~~~~~~~~
-# Null model
-#fit1_null <- secr.fit(
- # ch,
-  #mask = vegmask,
-  #model = list(D ~ 1, g0 ~ 1, sigma ~ 1),
-#  detectfn = 1 #HZ was model w/ lowest AIC earlier
-#)
-
-# Habitat model (density varies by vegetation)
-#fit1_Dhab <- secr.fit(
- # ch,
-  #mask = vegmask,
-  #model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1),
-  #detectfn = 1
-#) #issue here
-
-#checking covariates actually exist
-#covariates(vegmask) #exists BUT a lot of NAs
-
-#forcing CLASS correction for NAs
-#covariates(vegmask) <- lapply(covariates(vegmask), function(df) {
-  
-  # extract and force to character
- # cls <- as.character(df$CLASS)
-  
-  # replace ALL missing values
-  #cls[is.na(cls) | cls == "" | cls == "NA"] <- "NoVegData"
-  
-  # trim whitespace (important)
-#  cls <- trimws(cls)
-  
-  # rebuild factor cleanly
- # df$CLASS <- factor(cls)
-  
-  #return(df)
-#})
-
-#vegmask <- shareFactorLevels(vegmask)
-#verify(vegmask)
-
-#check of CLASS
-#lapply(covariates(vegmask), function(df) {
- # list(
-  #  n_NA = sum(is.na(df$CLASS)),
-   # table = table(df$CLASS)
-  #)
-#}) #STILL A LOT OF NAs ---> MOVE ON TO vegext
-
-
-#compare models 
-#AIC(fit1_null, fit1_Dhab) #won't work
-
-#Version 2: Veg extent ~~~~~~~~~~~~
-# Null model
-#fit2_null <- secr.fit(
- # ch,
-  #mask = vegext,
-#  model = list(D ~ 1, g0 ~ 1, sigma ~ 1)
-#)
-
-# Habitat model
-#fit2_Dhab <- secr.fit(
- # ch,
-  #mask = vegext,
-  #model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1)
-#) #WARNING --- VERY SLOW & NOT DESIRED CLASSES
-
-#compare models
-#AIC(fit2_null, fit2_Dhab)
-
-
-#predict(fit2_Dhab)
-#predict(fit2_Dhab)$D
-
-#coef(fit2_Dhab)
-#summary(fit2_Dhab)
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#TO DO 4/21/26:
-# 1. check what poly = does
-  #GOOD - instead of creating a circular buffer around traps, the mask is clipped to your habitat shapefile geometry.
-  #buffer defines potential movement space
-  #poly defines habitat-constrained state space
-
-# 2. reclassify down to ~5 (focus on what is at cams) -- GOOD, may need to change categories
-
-# 3. make NA adjacent class type or mask/remove them
-# 4. put cats that were only captured once back in! --- GOOD
-# 5. plot density vs buffer size (500, 1000, 15000 etc.)
-# 6. find distance from edge of island to camera trap array/create plot?
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-#Checking D estimates & changes in buffer size............................. 
+#Checking D estimates & changes in buffer size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #OK... next moves before models......
 #graph buffer sizes & estimates
 #decide on final buffer
@@ -538,7 +388,7 @@ ggplot(subset(D_long, Session == "Session2"),
   theme_minimal()
 
 #fits <- lapply(buffers, function(b) {
- # secr.fit(ch, buffer = b)}) #fitting all the buffers
+# secr.fit(ch, buffer = b)}) #fitting all the buffers
 
 #checking if D estimate stabilizes
 
@@ -561,6 +411,37 @@ matplot(buffers, t(D_values), type = "b", pch = 1:2, col = 1:2,
         xlab = "Buffer (m)", ylab = "D estimate", lty = 1:2)
 legend("topright", legend=c("Session 1","Session 2"), pch=1:2, lty=1:2)
 
+#Creating vegetation mask that will clip mask to edge of island ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+veg_sf <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp") %>%
+  st_transform(crs = st_crs(traps.sf))
+plot(veg_sf) #can skip this, just shows you available data
+
+#Version 2: clipped to veg extent................................. 
+veg_sp <- as(veg_sf, "Spatial")
+
+vegext <- make.mask(
+  ch.traps,
+  buffer = 3000,
+  spacing = 100,
+  type = "polygon",
+  poly = veg_sp  #this uses the boundaries of veg to clip the mask
+)
+
+vegext <- addCovariates(
+  object = vegext,
+  spatialdata = veg_sf,
+  columns = "CLASS"
+)
+
+vegext <- shareFactorLevels(vegext)
+verify(vegext) #nice
+
+#covariates in vegext
+#session 1
+table(covariates(vegext)[[1]]$CLASS)
+#session 2
+table(covariates(vegext)[[2]]$CLASS) #TOO MANY --> NEED TO PAIR DOWN
+
 #Creating vegext with paired down CLASS............................................
 #look at CLASS at cam trap locations
 table(traps$CLASS.landcover) 
@@ -569,12 +450,6 @@ table(traps$CLASS.landcover)
 #Other Shrub and Grass, 
 #Leucaena Leucocephala (Tangantangan), 
 #Native Limestone Forest
-
-#covariates in vegext
-#session 1
-table(covariates(vegext)[[1]]$CLASS)
-#session 2
-table(covariates(vegext)[[2]]$CLASS)
 
 #ok.... let's try a different approach --> reclassify veg_sf & then make vegext
 recode_CLASS <- function(x) {
@@ -612,7 +487,7 @@ table(veg_sf$CLASS) #new version -- looks good!!
 
 #remaking vegext
 veg_sp <- as(veg_sf, "Spatial")
-table(veg_sp$CLASS)
+table(veg_sp$CLASS) #good
 
 vegext <- make.mask(
   ch.traps,
@@ -637,41 +512,275 @@ table(covariates(vegext)[[1]]$CLASS)
 #session 2
 table(covariates(vegext)[[2]]$CLASS) #good
 
+#save veg ext
+saveRDS(vegext, file = "veg_mask_reclass1.rds")
+vegext <- readRDS("veg_mask_reclass1.rds")
 
-#Version 2: NEW Veg extent models~~~~~~~~~~~~
-# Null model
-fit_null <- secr.fit(
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#TO DO 4/21/26:
+# 1. check what poly = does
+  #GOOD - instead of creating a circular buffer around traps, the mask is clipped to your habitat shapefile geometry.
+  #buffer defines potential movement space
+  #poly defines habitat-constrained state space
+
+# 2. reclassify down to ~5 (focus on what is at cams) -- GOOD, may need to change categories
+
+# 3. make NA adjacent class type or mask/remove them -MAY NOT NEED?
+# 4. put cats that were only captured once back in! --- GOOD
+# 5. plot density vs buffer size (500, 1000, 15000 etc.) -- GOOD
+# 6. find distance from edge of island to camera trap array/create plot? -- GOOD
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+#Version 2: NEW Veg extent models~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Null model: Hazard Rate
+fit_null_HZ <- secr.fit(
   ch,
   mask = vegext,
   model = list(D ~ 1, g0 ~ 1, sigma ~ 1),
   detectfn = 1
 )
 
-saveRDS(fit_null, file = "null_b2000_vegext_s100_HZ_model.rds")
-#fit_null <- readRDS("null_b2000_vegext_s100_HZ_model.rds")
+fit_null_HZ
 
-# Habitat model
+saveRDS(fit_null, file = "null_b2000_vegext_s100_HZ_model.rds")
+fit_null_HZ <- readRDS("null_b2000_vegext_s100_HZ_model.rds")
+
+# Null model: Halfnormal
+fit_null_HN <- secr.fit(
+  ch,
+  mask = vegext,
+  model = list(D ~ 1, g0 ~ 1, sigma ~ 1),
+  detectfn = 0
+)
+
+saveRDS(fit_null_HN, file = "null_b2000_vegext_s100_HN_model.rds")
+fit_null_HN <- readRDS("null_b2000_vegext_s100_HN_model.rds")
+
+#Null model: Exponential
+fit_null_EX <- secr.fit(
+  ch,
+  mask = vegext,
+  model = list(D ~ 1, g0 ~ 1, sigma ~ 1),
+  detectfn = 2
+)
+
+saveRDS(fit_null_EX, file = "null_b2000_vegext_s100_EX_model.rds")
+fit_null_EX <- readRDS("null_b2000_vegext_s100_EX_model.rds")
+
+#Compare null models
+AIC(fit_null_HZ, fit_null_HN, fit_null_EX) #HZ (detectfn = 1) still the best detectfn 
+#......................................................................
+
+# Habitat model: D ~ CLASS 
 fit_Dclass <- secr.fit(
   ch,
   mask = vegext,
-  model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1)
+  model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1),
+  detectfn = 1
 ) #WARNING --- VERY SLOW 
 
+#Warning message:
+#In secr.fit(ch, mask = vegext, model = list(D ~ CLASS, g0 ~ 1, sigma ~  :
+            #at least one variance calculation failed 
+
+#DID NOT WORK PROPERLY ---> MISSING CI ESTIMATES
+# WILL STILL SAVE BUT DO NOT USE
+
 saveRDS(fit_Dclass, file = "DxCLASS_b2000_vegext_s100_HZ_model.rds")
-#fit_Dclass <- readRDS("DxCLASS_b2000_vegext_s100_HZ_model.rds")
+fit_Dclass <- readRDS("DxCLASS_b2000_vegext_s100_HZ_model.rds")
+
+#fit_DclassHN did work & results saved in object (DxCLASS_b2000_vegext_s100_HN_model.rds)
+AIC(fit_DclassHN, fit_null_HN, fit_null_HZ)
+
+#MUST'VE NOT LIKED THE EXTRA PARAMETER (z) in HZ
 
 #compare models
-AIC(fit_null, fit_Dclass) #null has lower AIC
+AIC(fit_null_HZ, fit_Dclass) #null has lower AIC by 1.543
+
+predict(fit_Dclass) #just did not work.......
 
 predict(fit_Dclass)
-
-predict(fit_Dclass)
-predict(fit_Dclass)$D
 
 coef(fit_Dclass)
 summary(fit_Dclass)
 
-#Checking for distance from edge of island to camera array.............................
+#WILL NEED TO PAIR DOWN EVEN MORE & SEE IF THAT WORKS!!!!!!!!!!
+
+#....................................................................................
+
+# Session model: D ~ session
+fit_Dsess <- secr.fit(
+  ch,
+  mask = vegext,
+  model = list(D ~ session, g0 ~ 1, sigma ~ 1),
+  detectfn = 1
+)
+
+saveRDS(fit_Dsess, file = "Dxsess_b2000_vegext_s100_HZ_model.rds")
+fit_Dsess <- readRDS("Dxsess_b2000_vegext_s100_HZ_model.rds")
+
+# Session model: g0 ~ session
+fit_g0sess <- secr.fit(
+  ch,
+  mask = vegext,
+  model = list(D ~ 1, g0 ~ session, sigma ~ 1),
+  detectfn = 1
+)
+
+saveRDS(fit_g0sess, file = "g0sess_b2000_vegext_s100_HZ_model.rds")
+fit_g0sess <- readRDS("g0sess_b2000_vegext_s100_HZ_model.rds")
+
+# Session model: sigma ~ session
+fit_sigmasess <- secr.fit(
+  ch,
+  mask = vegext,
+  model = list(D ~ 1, g0 ~ 1, sigma ~ session),
+  detectfn = 1
+)
+
+saveRDS(fit_sigmasess, file = "sigmasess_b2000_vegext_s100_HZ_model.rds")
+fit_sigmasess <- readRDS("sigmasess_b2000_vegext_s100_HZ_model.rds")
+
+# Session model: D ~ session, g0 ~ session, sigma ~ session
+fit_full_sess <- secr.fit(
+  ch,
+  mask = vegext,
+  model = list(D ~ session, g0 ~ session, sigma ~ session),
+  detectfn = 1
+)
+
+saveRDS(fit_full_sess, file = "fullsess_b2000_vegext_s100_HZ_model.rds")
+fit_full_sess <- readRDS("fullsess_b2000_vegext_s100_HZ_model.rds")
+
+#compare models
+AIC(fit_null_HZ, fit_Dsess, fit_g0sess, fit_sigmasess, fit_full_sess)
+#D ~ session has the lowest AIC by 1.299 compared to null HZ model
+
+#Reclassify vegext: Try 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+veg_sf <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp") %>%
+  st_transform(crs = st_crs(traps.sf))
+
+#look at CLASS at cam trap locations
+table(traps$CLASS.landcover) 
+
+#includes: Casuarina Thicket 2, 
+#Mixed Introduced Forest 17, 
+#Other Shrub and Grass 7, 
+#Leucaena Leucocephala (Tangantangan) 23, 
+#Native Limestone Forest 1
+
+#look at CLASS in previous vegext --> 6 covariates --> TOO MANY
+#session 1
+table(covariates(vegext)[[1]]$CLASS)
+#session 2
+table(covariates(vegext)[[2]]$CLASS)
+
+
+#ok.... let's try a different approach --> reclassify try 2
+recode_CLASS <- function(x) {
+  
+  x <- trimws(as.character(x))
+  
+  x[is.na(x) | x == "" | x == "NA"] <- "NoVegData"
+  
+  x[x %in% c("Native Limestone Forest", 
+             "Mixed Introduced Forest")] <- "NativeMixedForest"
+  
+  x[x %in% c("Leucaena Leucocephala (Tangantangan)", 
+             "Agroforest", 
+             "Agroforest -- Coconut",
+             "Casuarina Thicket")] <- "IntroducedForest"
+  
+  x[x %in% c("Other Shrub and Grass",
+             "Cropland", 
+             "Urban and Built-up",
+             "Urban Vegetation",
+             "Strand",
+             "Barren/Sandy Beach/Bare Rocks",
+             "Wetland")] <- "UnForested"
+  
+  x
+}
+
+#IS IRONWOOD NATIVE OR INTRODUCED????
+
+table(veg_sf$CLASS) #old version 
+
+veg_sf$CLASS <- recode_CLASS(veg_sf$CLASS)
+
+table(veg_sf$CLASS) #new version: 3 CLASSES -- looks good!!
+
+#remaking vegext
+veg_sp <- as(veg_sf, "Spatial")
+table(veg_sp$CLASS) #good
+
+vegext2 <- make.mask(
+  ch.traps,
+  buffer = 2000, 
+  spacing = 100,
+  type = "polygon",
+  poly = veg_sp
+)
+
+vegext2 <- addCovariates(
+  object = vegext2,
+  spatialdata = veg_sf,
+  columns = "CLASS"
+)
+
+vegext2 <- shareFactorLevels(vegext2)
+verify(vegext2) #nice
+
+#checking covariates in vegext2
+#session 1
+table(covariates(vegext2)[[1]]$CLASS)
+#session 2
+table(covariates(vegext2)[[2]]$CLASS) #good -- looks evenly spread across CLASS :)
+
+#save veg ext
+saveRDS(vegext2, file = "veg_mask_reclass2.rds")
+vegext2 <- readRDS("veg_mask_reclass2.rds")
+
+#Try habitat model again w/ HZ detectfn.........................
+# Habitat model: D ~ CLASS 
+# Going to keep D ~ session out for now
+
+fit_Dclass2 <- secr.fit(
+  ch,
+  mask = vegext2,
+  model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1),
+  detectfn = 1 #HZ
+) #WARNING --- VERY SLOW 
+
+saveRDS(fit_Dclass2, file = "DxCLASS2_b2000_vegext_s100_HZ_model.rds")
+fit_Dclass2 <- readRDS("DxCLASS2_b2000_vegext_s100_HZ_model.rds")
+
+#compare models
+AIC(fit_Dclass2, fit_Dsess, fit_null_HZ) #Dsess, Dclass2, then null all within 3 AIC
+
+predict(fit_Dclass2) 
+
+coef(fit_Dclass2)
+summary(fit_Dclass2)
+
+# Behavioral model: g0 ~ b
+fit_g0b <- secr.fit(
+  ch,
+  mask = vegext2,
+  model = list(D ~ 1, g0 ~ b, sigma ~ 1),
+  detectfn = 1 #HZ
+) 
+
+saveRDS(fit_g0b, file = "g0b_b2000_vegext_s100_HZ_model.rds")
+fit_g0b <- readRDS("g0b_b2000_vegext_s100_HZ_model.rds")
+
+predict(fit_g0b) 
+
+coef(fit_g0b)
+summary(fit_g0b)
+
+#Checking for distance from edge of island to camera array ###############################################################
 island_boundary <- st_boundary(st_union(veg_sf))
 plot(island_boundary)
 

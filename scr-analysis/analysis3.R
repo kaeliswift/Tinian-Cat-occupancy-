@@ -612,6 +612,7 @@ table(veg_sf$CLASS) #new version -- looks good!!
 
 #remaking vegext
 veg_sp <- as(veg_sf, "Spatial")
+table(veg_sp$CLASS)
 
 vegext <- make.mask(
   ch.traps,
@@ -642,26 +643,33 @@ table(covariates(vegext)[[2]]$CLASS) #good
 fit_null <- secr.fit(
   ch,
   mask = vegext,
-  model = list(D ~ 1, g0 ~ 1, sigma ~ 1)
+  model = list(D ~ 1, g0 ~ 1, sigma ~ 1),
+  detectfn = 1
 )
 
+saveRDS(fit_null, file = "null_b2000_vegext_s100_HZ_model.rds")
+#fit_null <- readRDS("null_b2000_vegext_s100_HZ_model.rds")
+
 # Habitat model
-fit_Dhab <- secr.fit(
+fit_Dclass <- secr.fit(
   ch,
   mask = vegext,
   model = list(D ~ CLASS, g0 ~ 1, sigma ~ 1)
 ) #WARNING --- VERY SLOW 
 
+saveRDS(fit_Dclass, file = "DxCLASS_b2000_vegext_s100_HZ_model.rds")
+#fit_Dclass <- readRDS("DxCLASS_b2000_vegext_s100_HZ_model.rds")
+
 #compare models
-AIC(fit_null, fit_Dhab)
+AIC(fit_null, fit_Dclass) #null has lower AIC
 
-predict(fit_null)
+predict(fit_Dclass)
 
-predict(fit_Dhab)
-predict(fit_Dhab)$D
+predict(fit_Dclass)
+predict(fit_Dclass)$D
 
-coef(fit_Dhab)
-summary(fit_Dhab)
+coef(fit_Dclass)
+summary(fit_Dclass)
 
 #Checking for distance from edge of island to camera array.............................
 island_boundary <- st_boundary(st_union(veg_sf))

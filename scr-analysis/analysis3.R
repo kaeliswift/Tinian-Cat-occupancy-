@@ -333,6 +333,10 @@ fits <- lapply(buffers, function(b) { #THIS WILL TAKE A LOT OF TIME
   )
 })
 
+saveRDS(fits, file = "D_buffer_fits.rds")
+fits <- readRDS("D_buffer_fits.rds")
+
+
 #extract density values (D)
 D_values <- sapply(fits, function(fit) {
   sapply(derived(fit), function(x) x["D","estimate"])
@@ -774,6 +778,8 @@ fit_g0b <- secr.fit(
 
 saveRDS(fit_g0b, file = "g0b_b2000_vegext_s100_HZ_model.rds")
 fit_g0b <- readRDS("g0b_b2000_vegext_s100_HZ_model.rds")
+
+AIC(fit_g0b, fit_null_HZ)  #models not compatible for AIC...
 
 predict(fit_g0b) 
 

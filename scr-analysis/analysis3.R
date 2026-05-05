@@ -611,9 +611,14 @@ summary(fit_Dclass)
 
 #WILL NEED TO PAIR DOWN EVEN MORE & SEE IF THAT WORKS!!!!!!!!!!
 
-#....................................................................................
+#Final Analysis............######################################################################################
+# Compare null models.........................................
+fit_null_HZ <- readRDS("null_b2000_vegext_s100_HZ_model.rds")
+fit_null_EX <- readRDS("null_b2000_vegext_s100_EX_model.rds")
+fit_null_HN <- readRDS("null_b2000_vegext_s100_HN_model.rds")
+AIC(fit_null_HZ, fit_null_HN, fit_null_EX) #HZ (detectfn = 1) still the best detectfn 
 
-# Session model: D ~ session
+# Session model: D ~ session ..................................
 fit_Dsess <- secr.fit(
   ch,
   mask = vegext,
@@ -624,7 +629,7 @@ fit_Dsess <- secr.fit(
 saveRDS(fit_Dsess, file = "Dxsess_b2000_vegext_s100_HZ_model.rds")
 fit_Dsess <- readRDS("Dxsess_b2000_vegext_s100_HZ_model.rds")
 
-# Session model: g0 ~ session
+# Session model: g0 ~ session ..................................
 fit_g0sess <- secr.fit(
   ch,
   mask = vegext,
@@ -635,7 +640,7 @@ fit_g0sess <- secr.fit(
 saveRDS(fit_g0sess, file = "g0sess_b2000_vegext_s100_HZ_model.rds")
 fit_g0sess <- readRDS("g0sess_b2000_vegext_s100_HZ_model.rds")
 
-# Session model: sigma ~ session
+# Session model: sigma ~ session ..............................
 fit_sigmasess <- secr.fit(
   ch,
   mask = vegext,
@@ -646,7 +651,7 @@ fit_sigmasess <- secr.fit(
 saveRDS(fit_sigmasess, file = "sigmasess_b2000_vegext_s100_HZ_model.rds")
 fit_sigmasess <- readRDS("sigmasess_b2000_vegext_s100_HZ_model.rds")
 
-# Session model: D ~ session, g0 ~ session, sigma ~ session
+# Session model: D ~ session, g0 ~ session, sigma ~ session ............
 fit_full_sess <- secr.fit(
   ch,
   mask = vegext,
@@ -657,7 +662,7 @@ fit_full_sess <- secr.fit(
 saveRDS(fit_full_sess, file = "fullsess_b2000_vegext_s100_HZ_model.rds")
 fit_full_sess <- readRDS("fullsess_b2000_vegext_s100_HZ_model.rds")
 
-#compare models
+#compare models .................................................
 AIC(fit_null_HZ, fit_Dsess, fit_g0sess, fit_sigmasess, fit_full_sess)
 #D ~ session has the lowest AIC by 1.299 compared to null HZ model
 
@@ -742,12 +747,12 @@ table(covariates(vegext2)[[1]]$CLASS)
 #session 2
 table(covariates(vegext2)[[2]]$CLASS) #good -- looks evenly spread across CLASS :)
 
-#save veg ext
+# save veg ext
 saveRDS(vegext2, file = "veg_mask_reclass2.rds")
 vegext2 <- readRDS("veg_mask_reclass2.rds")
 
-#Try habitat model again w/ HZ detectfn.........................
-# Habitat model: D ~ CLASS 
+#Try habitat model again w/ HZ detectfn
+# Habitat model: D ~ CLASS  ................................................
 # Going to keep D ~ session out for now
 
 fit_Dclass2 <- secr.fit(
@@ -760,7 +765,7 @@ fit_Dclass2 <- secr.fit(
 saveRDS(fit_Dclass2, file = "DxCLASS2_b2000_vegext_s100_HZ_model.rds")
 fit_Dclass2 <- readRDS("DxCLASS2_b2000_vegext_s100_HZ_model.rds")
 
-#compare models
+#compare models ............................
 AIC(fit_Dclass2, fit_Dsess, fit_null_HZ) #Dsess, Dclass2, then null all within 3 AIC
 
 predict(fit_Dclass2) 
@@ -768,7 +773,37 @@ predict(fit_Dclass2)
 coef(fit_Dclass2)
 summary(fit_Dclass2)
 
-# Behavioral model: g0 ~ b
+# Habitat & Session model: D ~ CLASS + session
+fit_Dclass_sess <- secr.fit(
+  ch,
+  mask = vegext2,
+  model = list(D ~ CLASS + session, g0 ~ 1, sigma ~ 1),
+  detectfn = 1 #HZ
+) #WARNING --- VERY SLOW 
+
+#Warning messages:
+#  1: In secr.fit(ch, mask = vegext2, model = list(D ~ CLASS + session,  :
+ #                                                   possible maximization error: nlm returned code 4. See ?nlm
+  #                                                2: In secr.fit(ch, mask = vegext2, model = list(D ~ CLASS + session,  :
+     #                                                                                               at least one variance calculation failed 
+
+saveRDS(fit_Dclass_sess, file = "DxCLASSxsess_b2000_vegext_s100_HZ_model.rds")
+fit_Dclass_sess <- readRDS("DxCLASSxsess_b2000_vegext_s100_HZ_model.rds")
+
+predict(fit_Dclass_sess)
+summary(fit_Dclass_sess) # failed to calculate NativeMixedForest
+#compare models ............................
+AIC(fit_Dclass2, fit_Dsess, fit_null_HZ, fit_Dclass_sess) 
+
+#Habitat detection model: g0 ~ CLASS
+#fit_g0class <- secr.fit(
+ # ch,
+  #mask = vegext2,
+  #model = list(D ~ 1, g0 ~ CLASS, sigma ~ 1),
+  #detectfn = 1 #HZ
+#) ---> NOPE NEED THE COVARIATE TO BE SITE-LEVEL
+
+# Behavioral model: g0 ~ b ......................
 fit_g0b <- secr.fit(
   ch,
   mask = vegext2,
@@ -779,12 +814,29 @@ fit_g0b <- secr.fit(
 saveRDS(fit_g0b, file = "g0b_b2000_vegext_s100_HZ_model.rds")
 fit_g0b <- readRDS("g0b_b2000_vegext_s100_HZ_model.rds")
 
-AIC(fit_g0b, fit_null_HZ)  #models not compatible for AIC...
+AIC(fit_g0b, fit_null_HZ, fit_g0sess)  #models not compatible for AIC...
 
 predict(fit_g0b) 
 
 coef(fit_g0b)
 summary(fit_g0b)
+
+#time as a factor .......................................
+fit_g0t <- secr.fit(
+  ch,
+  mask = vegext2,
+  model = list(D ~ 1, g0 ~ t, sigma ~ 1),
+  detectfn = 1 #HZ
+) 
+
+saveRDS(fit_g0b, file = "g0b_b2000_vegext_s100_HZ_model.rds")
+fit_g0b <- readRDS("g0b_b2000_vegext_s100_HZ_model.rds")
+
+AIC(fit_g0b, fit_g0t)
+
+#time as a trend
+stoat.T<-secr.fit(stoatCH,model=list(D~1, g0~T, sigma~1), buffer=1000)
+
 
 #Checking for distance from edge of island to camera array ###############################################################
 island_boundary <- st_boundary(st_union(veg_sf))

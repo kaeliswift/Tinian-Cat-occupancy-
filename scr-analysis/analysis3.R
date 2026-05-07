@@ -592,7 +592,7 @@ fit_Dclass <- secr.fit(
 # WILL STILL SAVE BUT DO NOT USE
 
 saveRDS(fit_Dclass, file = "DxCLASS_b2000_vegext_s100_HZ_model.rds")
-fit_Dclass <- readRDS("DxCLASS_b2000_vegext_s100_HZ_model.rds")
+fit_DclassHN <- readRDS("DxCLASS_b2000_vegext_s100_HZ_model.rds")
 
 #fit_DclassHN did work & results saved in object (DxCLASS_b2000_vegext_s100_HN_model.rds)
 AIC(fit_DclassHN, fit_null_HN, fit_null_HZ)
@@ -728,7 +728,7 @@ vegext2 <- make.mask(
   ch.traps,
   buffer = 2000, 
   spacing = 100,
-  type = "polygon",
+  type = "polygon", #not listed as an option.....
   poly = veg_sp
 )
 
@@ -740,6 +740,9 @@ vegext2 <- addCovariates(
 
 vegext2 <- shareFactorLevels(vegext2)
 verify(vegext2) #nice
+plot(vegext2)
+
+str(vegext2)
 
 #checking covariates in vegext2
 #session 1
@@ -768,6 +771,7 @@ fit_Dclass2 <- readRDS("DxCLASS2_b2000_vegext_s100_HZ_model.rds")
 #compare models ............................
 AIC(fit_Dclass2, fit_Dsess, fit_null_HZ) #Dsess, Dclass2, then null all within 3 AIC
 
+summary(fit_null_HZ)
 predict(fit_Dclass2) 
 
 coef(fit_Dclass2)
@@ -827,15 +831,30 @@ fit_g0t <- secr.fit(
   mask = vegext2,
   model = list(D ~ 1, g0 ~ t, sigma ~ 1),
   detectfn = 1 #HZ
-) 
+)  # took 10 hours
 
-saveRDS(fit_g0b, file = "g0b_b2000_vegext_s100_HZ_model.rds")
-fit_g0b <- readRDS("g0b_b2000_vegext_s100_HZ_model.rds")
+saveRDS(fit_g0t, file = "g0t_b2000_vegext_s100_HZ_model.rds")
+fit_g0t <- readRDS("g0t_b2000_vegext_s100_HZ_model.rds")
 
 AIC(fit_g0b, fit_g0t)
 
-#time as a trend
-stoat.T<-secr.fit(stoatCH,model=list(D~1, g0~T, sigma~1), buffer=1000)
+#time as a trend ..........................................
+fit_g0T <- secr.fit(
+  ch,
+  mask = vegext2,
+  model = list(D ~ 1, g0 ~ T, sigma ~ 1),
+  detectfn = 1 #HZ
+) 
+
+saveRDS(fit_g0T, file = "g0T_b2000_vegext_s100_HZ_model.rds")
+fit_g0T <- readRDS("g0T_b2000_vegext_s100_HZ_model.rds")
+
+AIC(fit_g0b, fit_g0t, fit_g0T) #g0~b best fitting by >3 delta AIC
+
+#Completed in 48339.06 seconds at 11:33:52 05 May 2026 
+#Warning message:
+ # In secr.fit(ch, mask = vegext2, model = list(D ~ 1, g0 ~ T, sigma ~  :
+  #                                               at least one variance calculation failed 
 
 
 #Checking for distance from edge of island to camera array ###############################################################

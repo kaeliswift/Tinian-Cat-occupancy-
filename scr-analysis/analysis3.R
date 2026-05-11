@@ -754,6 +754,11 @@ table(covariates(vegext2)[[2]]$CLASS) #good -- looks evenly spread across CLASS 
 saveRDS(vegext2, file = "veg_mask_reclass2.rds")
 vegext2 <- readRDS("veg_mask_reclass2.rds")
 
+#trying plotting mask again
+plot(vegext2, covariate = 'CLASS', dots = FALSE, 
+     border = 100)
+plotMaskEdge(vegext2, add = TRUE)
+
 #Try habitat model again w/ HZ detectfn
 # Habitat model: D ~ CLASS  ................................................
 # Going to keep D ~ session out for now

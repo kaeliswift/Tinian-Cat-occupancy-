@@ -268,5 +268,27 @@ predict(cats.HN)
 
 esaPlot(cats.HN)
 
-#FIGURE OUT INDIVIDUALS ISSUE!!
-apply(ch[[1]], 1, sum)
+#Things to do: 
+# 1. clip mask to MLA or trap array not island boundary
+      # a. double check that does not mess w/ analysis
+# 2. is the mask working correctly?
+      # a. try using raster data instead
+# 3. 4 classes for habitat covariates
+# 4. double check that individual resights are ok/no corrections needed
+# 5. add effort to ch.traps
+
+#To dos: #1 - 3............................
+ #raster data for cats
+  #lidar shapefile from cats 
+
+tinian <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp") 
+names(tinian)
+str(tinian)
+plot(tinian["CLASS"])
+
+#try converting shp into a raster.......
+
+
+#FIGURE OUT INDIVIDUALS ISSUE!!..................................................................
+apply(ch[[1]], 1, sum) #there are currently a high # of resights for select individuals
+#THIS MIGHT CONTRIBUTE TO ISSUES w/ MODEL..........................

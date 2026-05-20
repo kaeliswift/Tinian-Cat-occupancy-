@@ -8,6 +8,7 @@ library(sf)
 library(sp)
 library(ggplot2)
 library(readr)
+library(terra)
 
 #Load TrapTagger Data ##########################################################
 raw.data <- read.csv("TrapTagger_Cat_Individuals.csv")
@@ -154,21 +155,14 @@ traps_year1 <- traps.data %>% filter(TrapID %in% trapIDs_year1) %>% select(TrapI
 traps_year2 <- traps.data %>% filter(TrapID %in% trapIDs_year2) %>% select(TrapID, x, y, CLASS.landcover)
 
 
-covariates(traps1) <- data.frame(habitat = traps_year1$CLASS.landcover)
-covariates(traps2) <- data.frame(habitat = traps_year2$CLASS.landcover)
+covariates(traps1) <- data.frame(site_habitat = traps_year1$CLASS.landcover)
+covariates(traps2) <- data.frame(site_habitat = traps_year2$CLASS.landcover)
 
 traps(ch[[1]]) <- traps1
 traps(ch[[2]]) <- traps2
 
 covariates(traps(ch[[1]])) #worked
 covariates(traps(ch[[2]]))
-
-# converting spaces to _
-traps_year1 <- traps_year1 %>%
-  mutate(CLASS.landcover = gsub(" ", "_", CLASS.landcover))
-
-traps_year2 <- traps_year2 %>%
-  mutate(CLASS.landcover = gsub(" ", "_", CLASS.landcover))
 
 
 # Inspect ch ###################################################################
@@ -287,8 +281,6 @@ par(mfrow = c(1,1), mar = c(1,1,1,1))
 plot(tinian["Habitat"])
 
 # 2. rasterize tinian data
-library(terra)
-
 tinian_v <- vect(tinian)
 
 r <- rast(tinian_v, resolution = 100, #100 m pixels <- can change this 
@@ -301,6 +293,7 @@ habitat_raster <- rasterize(
   tinian_v,
   r,
   field = "Habitat_ID",
+  fun = "min"
 )
 
 
@@ -321,6 +314,17 @@ for (i in 1:2) {
 summary(clippedmask)
 table(covariates(clippedmask[[1]])$habitat, useNA="ifany")
 table(covariates(clippedmask[[2]])$habitat, useNA="ifany")
+
+# 5. address Nas by using nearest raster cell
+#session 1
+xy1 <- cbind(clippedmask[[1]]$x, clippedmask[[1]]$y)
+
+na_idx <- which(is.na(covariates(clippedmask[[1]])$habitat))
+
+covariates(clippedmask[[1]])$habitat[na_idx] <- terra::extract(
+  habitat_raster,
+  xy1[na_idx, , drop = FALSE]
+)[,2]
 
 #final option: try converting shp into a raster....... ##########################
 #explore distance to "Urban x" CLASS......................

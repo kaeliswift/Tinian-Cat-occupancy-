@@ -117,10 +117,35 @@ length(unique(data.clean$Individuals)) #47 individuals
 #chose 1 week = 1 occasion
 #chose to cap at 6 occasions to match methods of 6-week deployment
 #the above can be changed by modifying the below code: 
+
+#previous version: uses camera start date as occasion start for each trap
+#data <- data %>%
+ # mutate(Occasion = #takes the date and calculates occasion relative to deployment date
+   #        floor(as.numeric(difftime(DateTime, Deployment, units = "days")) / 7) + 1) %>%
+  #filter(Occasion >= 1 & Occasion <= 6) #filters for only 6 occasions 
+
+#NEW version: SESSION-WIDE OCCASIONS with the same start date per session
+
+session_starts <- tibble(
+  Session = c(1, 2),
+  SessionStart = as.POSIXct(
+    c("2024-10-17 00:00:00",
+      "2025-04-24 00:00:00"),
+    tz = "Pacific/Guam"
+  )
+)
+
 data <- data %>%
-  mutate(Occasion = #takes the date and calculates occasion relative to deployment date
-           floor(as.numeric(difftime(DateTime, Deployment, units = "days")) / 7) + 1) %>%
-  filter(Occasion >= 1 & Occasion <= 6) #filters for only 6 occasions 
+  left_join(session_starts, by = "Session") %>%
+  mutate(
+    Occasion = floor(
+      as.numeric(
+        difftime(DateTime, SessionStart, units = "days")
+      ) / 7
+    ) + 1
+  ) %>%
+  filter(Occasion >= 1 & Occasion <= 6)
+
 
 #Defining TrapID~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #make sure to check for white spaces / differences in spelling
@@ -230,10 +255,90 @@ plot (ch, tracks = TRUE)
 #Creating trap object..............................................................
 ch.traps <- traps(ch)
 
+#Adding usage & effort information to ch...............................................
+
+#usage for session 1
+
+#usage for session 2
+
+# CREATE USAGE MATRICES ====================================================
+
+make_usage_matrix <- function(session_num, traps_df, deploy_df, n_occasions = 6) {
+  
+  # traps for this session
+  trap_ids <- traps_df$TrapID
+  
+  # deployment info for this session
+  deploy_sess <- deploy_df %>%
+    filter(Session == session_num)
+  
+  # initialize matrix
+  usage_mat <- matrix(
+    0,
+    nrow = length(trap_ids),
+    ncol = n_occasions,
+    dimnames = list(trap_ids, paste0("occ", 1:n_occasions))
+  )
+  
+  # session start date
+  session_start <- min(deploy_sess$Deployment)
+  
+  # loop through traps
+  for(i in seq_along(trap_ids)) {
+    
+    trap <- trap_ids[i]
+    
+    trap_info <- deploy_sess %>%
+      filter(Site.Name == trap)
+    
+    if(nrow(trap_info) == 0) next
+    
+    deploy_date <- trap_info$Deployment[1]
+    term_date   <- trap_info$Termination[1]
+    
+    # loop through occasions
+    for(k in 1:n_occasions) {
+      
+      occ_start <- session_start + days((k - 1) * 7)
+      occ_end   <- occ_start + days(7)
+      
+      # overlap between detector activity and occasion
+      overlap_start <- max(deploy_date, occ_start)
+      overlap_end   <- min(term_date, occ_end)
+      
+      overlap_days <- as.numeric(
+        difftime(overlap_end, overlap_start, units = "days")
+      )
+      
+      # convert to proportional effort
+      effort <- max(0, min(1, overlap_days / 7))
+      
+      usage_mat[i, k] <- round(effort, 3)
+    }
+  }
+  
+  return(usage_mat)
+}
+
+usage_year1 <- make_usage_matrix(
+  session_num = 1,
+  traps_df = traps_year1,
+  deploy_df = start_end
+)
+
+usage_year2 <- make_usage_matrix(
+  session_num = 2,
+  traps_df = traps_year2,
+  deploy_df = start_end
+)
+
+
 #Analysis ########################################################################
 
 #Look at ch
 summary(ch)
+
+usage(traps(ch[[1]]))
 
 #estimate of sigma HN to suggest buffer size
 #buffer size is usually 4 sigma HN

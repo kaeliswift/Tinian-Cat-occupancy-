@@ -670,6 +670,18 @@ mDshore <- readRDS("mDshore.rds")
 hold2=predictDsurface(mDhabitat, mask = masklist, se.D = FALSE, cl.D = FALSE, alpha =0.05)
 plot(hold2)  
 
+# g0 ~ site_habitat
+mg0habitat <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ 1,
+    g0 ~ site_habitat,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+) #fails b/c need same covariate levels in each session (do not match rn)
+
 
 # Create effort matrix function ################################################
 make_usage_matrix <- function(session_num, traps_df, deploy_df, n_occasions = 6) {

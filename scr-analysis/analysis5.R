@@ -169,8 +169,8 @@ covariates(traps(ch[[2]]))
 summary(ch)
 plot(ch, tracks = TRUE)
 
-usage(traps(ch[[1]]))[1:42, ] #usage worked
-usage(traps(ch[[2]]))[1:8, ] 
+usage(traps(ch[[1]]))[1:42, ] #currently no usage -> ran into errors due to full usage in session 2& partial usage in session 1
+usage(traps(ch[[2]]))[1:8, ]                      # session 1 is still mainly covered so will ignore usage for now 
 
 # Rough estimate of buffer size ################################################
 #estimate of sigma HN to suggest buffer size
@@ -194,7 +194,7 @@ par(pty = "s",mar = c(4,4,2,2),mgp =c(2.5,0.8,0),las =1)
 esaPlot(cats.HN7000,ylim =c(0,4))
 abline(v=7000, col ="red",lty =2)
 
-suggest.buffer(cats.HN7000) #both ~11000 m
+suggest.buffer(cats.HN7000) #both ~11000 m -> weird
 
 #run the null model with a half normal detection
 cats.HN<-secr.fit(ch, buffer=8000, trace = FALSE, CL = TRUE)
@@ -203,7 +203,7 @@ predict(cats.HN)
 
 esaPlot(cats.HN)
 
-# Set Mask #####################################################################
+# Set Mask: IGNORE FOR NOW #####################################################################
 tinian <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp") 
 names(tinian)
 str(tinian)
@@ -235,7 +235,7 @@ plot(clippedmask, dots = FALSE, mesh = grey(0.4), col = NA, polycol = 'blue', ad
 plot(traps(ch[1]), pch = 16, cex = 0.8, add = TRUE, col = "red")
 plot(traps(ch[[2]]), pch = 16, cex = 0.8, add = TRUE, col = "green") #doesn't work but somehow plots with ch[[1]]
 
-# Adding Covariates to mask ####################################################
+# Adding Covariates to mask: IGNORE FOR NOW ####################################################
 # distance to shore............
 # need to assign covariates per session & then rejoin mask (otherwise a mismatch of points)
 mask1 <- clippedmask[[1]]
@@ -610,6 +610,377 @@ names(covariates(masklist)) #NOPE ---> BIG ISSUE.............................
 m0 <- secr.fit(ch, mask = masklist,
                model = list(D~Habitat_ID, g0~1, sigma~1),
                detectfn="halfnormal")
+
+# Set Mask Try 2: WORKS!!! ###############################################################
+
+# 1. read shapefile................
+tinian <- st_read(
+  "C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp"
+)
+
+# make sure CRS matches traps
+st_crs(tinian)
+
+# dissolve polygons into single island boundary
+island_boundary <- st_union(tinian)
+
+plot(st_geometry(island_boundary))
+
+# 2. reclassify habitat...............
+tinian <- tinian %>%
+  mutate(
+    habitat = case_when(
+      grepl("Leucaena", CLASS) ~ "tangantangan",
+      grepl("Mixed", CLASS) ~ "mixed_introduced",
+      grepl("Casuarina", CLASS) ~ "ironwood",
+      grepl("Other", CLASS) ~ "shrub_grass",
+      grepl("Native", CLASS) ~ "native_limestone",
+      TRUE ~ NA_character_
+    )
+  )
+
+table(tinian$habitat, useNA = "ifany")
+
+# 3. rasterize habitat...................
+tinian_v <- vect(tinian)
+
+# convert habitat to factor
+tinian_v$habitat <- as.factor(tinian_v$habitat)
+
+# template raster
+r <- rast(
+  tinian_v,
+  resolution = 100
+)
+
+# rasterize
+habitat_raster <- rasterize(
+  tinian_v,
+  r,
+  field = "habitat",
+  touches = TRUE
+)
+
+plot(habitat_raster) #nice
+
+# 4. build session masks separately...........
+
+masklist <- lapply(
+  1:2,
+  function(i) {
+    
+    m <- make.mask(
+      traps(ch[[i]]),
+      type = "trapbuffer",
+      buffer = 7000,
+      poly = vect(island_boundary)
+    )
+    
+    # extract habitat values
+    xy <- cbind(m$x, m$y)
+    
+    hab <- terra::extract(
+      habitat_raster,
+      xy
+    )[,2]
+    
+    # convert habitat values to factor
+    hab <- factor(hab)
+    
+    # attach covariates
+    covariates(m)$habitat <- hab
+    
+    # calculate distance to shore covariate
+    covariates(m)$d.to.shore <-
+      distanceToPolygon(
+        xy,
+        as.matrix(st_coordinates(st_cast(island_boundary, "MULTILINESTRING")))
+      )
+    
+    return(m)
+  }
+)
+
+masklist <- lapply(
+  1:2,
+  function(i){
+    
+    m <- make.mask(
+      traps(ch[[i]]),
+      type = "trapbuffer",
+      buffer = 7000,
+      poly = vect(island_boundary)
+    )
+    
+    # coordinates
+    xy <- cbind(m$x, m$y)
+    
+    # extract habitat
+    ex <- terra::extract(
+      habitat_raster,
+      xy
+    )
+    
+    # attach covariate
+    covariates(m)$habitat <- factor(ex$habitat)
+    
+    # set reference level
+    covariates(m)$habitat <-
+      relevel(
+        covariates(m)$habitat,
+        ref = "native_limestone"
+      )
+    
+    m
+  }
+)
+
+shoreline <- st_boundary(island_boundary)
+
+masklist <- lapply(
+  1:2,
+  function(i){
+    
+    m <- make.mask(
+      traps(ch[[i]]),
+      type = "trapbuffer",
+      buffer = 7000,
+      poly = vect(island_boundary)
+    )
+    
+    # coordinates
+    xy <- cbind(m$x, m$y)
+    
+    # -------------------------
+    # HABITAT
+    # -------------------------
+    
+    ex <- terra::extract(
+      habitat_raster,
+      xy
+    )
+    
+    covariates(m)$habitat <- factor(ex$habitat)
+    
+    covariates(m)$habitat <-
+      relevel(
+        covariates(m)$habitat,
+        ref = "native_limestone"
+      )
+    
+    # -------------------------
+    # DISTANCE TO SHORE
+    # -------------------------
+    
+    # convert mask points to sf
+    pts <- st_as_sf(
+      data.frame(x = m$x, y = m$y),
+      coords = c("x", "y"),
+      crs = st_crs(tinian)
+    )
+    
+    # calculate distance to shoreline
+    dshore <- st_distance(
+      pts,
+      shoreline
+    )
+    
+    # convert units matrix to numeric vector
+    covariates(m)$d.to.shore <- as.numeric(dshore)
+    
+    m
+  }
+)
+
+summary(covariates(masklist[[1]])$d.to.shore)
+
+summary(covariates(masklist[[2]])$d.to.shore)
+
+summary(masklist[[1]])
+summary(masklist[[2]])
+
+verify(masklist[[1]]) #good
+verify(masklist[[2]]) #good
+verify(masklist) #issue
+
+names(covariates(masklist[[1]]))
+names(covariates(masklist[[2]]))
+
+
+# 5. replace blanks with NA............
+for(i in 1:2){
+  
+  m <- masklist[[i]]
+  
+  h <- as.character(covariates(m)$habitat)
+  
+  # convert blanks to NA
+  h[h == ""] <- NA
+  
+  # rebuild factor
+  h <- factor(h)
+  
+  # set reference level
+  h <- relevel(h, ref = "native_limestone")
+  
+  covariates(m)$habitat <- h
+  
+  masklist[[i]] <- m
+}
+
+table(covariates(masklist[[1]])$habitat, useNA="ifany")
+table(covariates(masklist[[2]])$habitat, useNA="ifany")
+
+
+# 6. replace NAs with nearest neighbor..........
+#session 1...
+m <- masklist[[1]]
+
+h <- covariates(m)$habitat
+
+# replace NA with nearest category manually
+h[is.na(h)] <- names(sort(table(h), decreasing = TRUE))[1]
+
+covariates(m)$habitat <- droplevels(h)
+
+masklist[[1]] <- m
+
+#check it worked
+table(
+  covariates(masklist[[1]])$habitat,
+  useNA = "ifany"
+) #good
+
+#session 2....
+m <- masklist[[2]]
+
+h <- covariates(m)$habitat
+
+# replace NA with nearest category manually
+h[is.na(h)] <- names(sort(table(h), decreasing = TRUE))[1]
+
+covariates(m)$habitat <- droplevels(h)
+
+masklist[[2]] <- m
+
+
+# 6. force secr to recognize both session masks.............
+class(masklist) <- c("mask", "list")
+verify(masklist)
+
+# 7. graph mask.........................
+plot(masklist[[1]], covariate = "habitat", pch = 15, cex = 0.6)
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+plot(masklist[[1]], covariate = "d.to.shore", pch = 15, cex = 0.6)
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+#plot mask extent
+plot(
+  masklist[[1]]$x,
+  masklist[[1]]$y,
+  col = NA
+)
+plot(masklist[[1]], covariate = "d.to.shore", pch = 15, cex = 0.6, add =TRUE)
+plot(traps(ch[[1]]), add = TRUE)
+
+plot(st_geometry(island_boundary), col = "grey90", border = "grey40")
+plot(masklist[[1]], covariate = "habitat", add = TRUE, pch = 15, cex = 0.5)
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+# 8. save mask..............
+saveRDS(masklist, file = "masklist.rds")
+masklist <- readRDS("masklist.rds")
+
+# 9. try modelling..............
+# null model
+m0 <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ 1,
+    g0 ~ 1,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(m0)
+AIC(m0) #1516
+
+saveRDS(m0, file = "m0.rds")
+m0 <- readRDS("m0.rds")
+
+# habitat model
+mDhabitat <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ habitat,
+    g0 ~ 1,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(mDhabitat)
+AIC(m0, mDhabitat) #habitat is better by 7 AIC
+
+saveRDS(mDhabitat, file = "mDhabitat.rds")
+mDhabitat <- readRDS("mDhabitat.rds")
+
+#try graphing
+hold=predictDsurface(mDhabitat, mask = masklist, se.D = FALSE, cl.D = FALSE, alpha =0.05)
+plot(hold)   #this one is boring cause we have no variation on D
+
+
+# session model 
+mDsession <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ session,
+    g0 ~ 1,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(mDsession)
+AIC(m0, mDhabitat, mDsession) #barely better than the null model
+
+saveRDS(mDsession, file = "mDsession.rds")
+mDsession <- readRDS("mDsession.rds")
+
+# distance to shore model
+#first scale the covariate
+for(i in 1:2){
+  covariates(masklist[[i]])$d.to.shore <-
+    scale(covariates(masklist[[i]])$d.to.shore)
+}
+
+mDshore <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ d.to.shore,
+    g0 ~ 1,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(mDshore)
+AIC(m0, mDhabitat, mDsession, mDshore) #best model so far
+
+saveRDS(mDshore, file = "mDshore.rds")
+mDshore <- readRDS("mDshore.rds")
+
+#try graphing
+hold2=predictDsurface(mDhabitat, mask = masklist, se.D = FALSE, cl.D = FALSE, alpha =0.05)
+plot(hold2)  
+
+#FIGURE OUT ADDING PROPER TRAP SPACING && ADDING BACK THE GRAPHS.............
 
 
 # Create effort matrix function ################################################

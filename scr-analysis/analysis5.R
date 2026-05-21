@@ -316,18 +316,301 @@ table(covariates(clippedmask[[1]])$habitat, useNA="ifany")
 table(covariates(clippedmask[[2]])$habitat, useNA="ifany")
 
 # 5. address Nas by using nearest raster cell
-#session 1
-xy1 <- cbind(clippedmask[[1]]$x, clippedmask[[1]]$y)
-
-na_idx <- which(is.na(covariates(clippedmask[[1]])$habitat))
-
-covariates(clippedmask[[1]])$habitat[na_idx] <- terra::extract(
+habitat_fill <- terra::focal(
   habitat_raster,
-  xy1[na_idx, , drop = FALSE]
-)[,2]
+  w = 3,
+  fun = modal,
+  na.policy = "only",
+  na.rm = TRUE
+)
 
-#final option: try converting shp into a raster....... ##########################
+for(i in 1:2){
+  
+  m <- clippedmask[[i]]
+  
+  xy <- cbind(m$x, m$y)
+  
+  ex <- terra::extract(habitat_fill, xy)
+  
+  covariates(m)$habitat <- ex$Habitat_ID
+  
+  clippedmask[[i]] <- m
+}
+
+table(covariates(clippedmask[[1]])$habitat,
+      useNA = "ifany") #check for NAs
+
+table(covariates(clippedmask[[2]])$habitat,
+      useNA = "ifany") #check for NAs
+
+levels(tinian_v$Habitat_ID)
+
+# 6. convert raster levels to habitat types
+hab_levels <- levels(tinian_v$Habitat_ID)
+
+for(i in 1:2){
+  
+  m <- clippedmask[[i]]
+  
+  # numeric raster codes
+  h <- covariates(m)$habitat
+  
+  # replace 0 with NA
+  h[h == 0] <- NA
+  
+  # convert numeric codes to labels
+  h_char <- hab_levels[h]
+  
+  covariates(m)$habitat <- factor(h_char)
+  
+  clippedmask[[i]] <- m
+}
+
+#session 1 
+table(covariates(clippedmask[[1]])$habitat,
+      useNA = "ifany") #NAs still remaining
+
+#session 2 
+table(covariates(clippedmask[[2]])$habitat,
+      useNA = "ifany") #NAs still remaining
+
+# 7. copy nearest for remaining NAs
+copynearest <- function(mask, covname){
+  
+  vals <- covariates(mask)[, covname]
+  
+  na_idx <- is.na(vals)
+  
+  # mask points with known habitat
+  known <- subset(mask, !na_idx)
+  
+  # nearest known mask point for every point
+  nn <- nearesttrap(mask, known)
+  
+  vals[na_idx] <- covariates(known)[nn[na_idx], covname]
+  
+  covariates(mask)[, covname] <- vals
+  
+  return(mask)
+}
+
+clippedmask[[1]] <- copynearest(clippedmask[[1]], "habitat")
+clippedmask[[2]] <- copynearest(clippedmask[[2]], "habitat")
+
+table(covariates(clippedmask[[1]])$habitat,
+      useNA = "ifany") #good no more nas
+
+table(covariates(clippedmask[[2]])$habitat,
+      useNA = "ifany") #good no more nas
+
+# 8. set the reference category before modeling 
+for(i in 1:2){
+  
+  covariates(clippedmask[[i]])$habitat <-
+    relevel(
+      covariates(clippedmask[[i]])$habitat,
+      ref = "native_limestone"
+    )
+}
+
+# 9. check that mask has covariates
+names(covariates(clippedmask[[1]]))
+names(covariates(clippedmask[[2]]))
+
+summary(clippedmask[[1]])
+summary(clippedmask[[2]])
+
+nrow(covariates(clippedmask[[1]]))
+length(clippedmask[[1]])
+
+plot(clippedmask[[1]])
+plot(st_geometry(tinian), add=TRUE)
+
+# 10. check out map
+plot(clippedmask[[1]],
+     covariate = "habitat",
+     pch = 15,
+     cex = 1.2)
+plot(traps(ch[[1]]),
+     add = TRUE,
+     pch = 16)
+
+par(mfrow = c(1,1), mar = c(1,1,1,1))
+plot(clippedmask, border = 100, ppoly = FALSE)
+plot(clippedmask, dots = FALSE, mesh = grey(0.4), col = NA, polycol = 'blue', add = TRUE) 
+plot(traps(ch[1]), pch = 16, cex = 0.8, add = TRUE, col = "red")
+plot(traps(ch[[2]]), pch = 16, cex = 0.8, add = TRUE, col = "green") #doesn't work but somehow plots with ch[[1]]
+
+plot(clippedmask[[1]], ppoly = TRUE)
+plot(st_geometry(tinian), add = TRUE, border = "grey")
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+plot(clippedmask, border = 100)
+plot(st_geometry(tinian), add = TRUE, col = NA, border = "grey")
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+range(traps(ch[[1]])$x)
+range(clippedmask[[1]]$x)
+
+range(traps(ch[[1]])$y)
+range(clippedmask[[1]]$y)
+
+plot(clippedmask[[1]], border = 100, ppoly = TRUE)
+plot(st_geometry(tinian), add = TRUE, border = "grey")
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+#graphing try 2
+library(sf)
+
+mask_sf <- st_as_sf(
+  data.frame(
+    x = clippedmask$x,
+    y = clippedmask$y,
+    habitat = covariates(clippedmask[[1]])$habitat
+  ),
+  coords = c("x","y"),
+  crs = st_crs(tinian)
+)
+
+plot(st_geometry(tinian), col = NA, border = "grey")
+plot(mask_sf["habitat"], add = TRUE, pch = 15)
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+plot(mask_sf)
+
+#try 3
+mask_sf <- st_as_sf(
+  data.frame(
+    x = clippedmask[[1]]$x,
+    y = clippedmask[[1]]$y,
+    habitat = covariates(clippedmask[[1]])$habitat
+  ),
+  coords = c("x","y"),
+  crs = st_crs(tinian)
+)
+
+# set plot window to MASK extent only
+plot(st_geometry(mask_sf), col = NA, axes = TRUE)
+
+# now add layers (they won't reset extent)
+plot(st_geometry(tinian), add = TRUE, border = "grey")
+
+plot(mask_sf["habitat"], add = TRUE, pch = 15)
+
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+#try 4: session 1 
+plot(clippedmask, border = 100, ppoly = FALSE)
+plot(clippedmask[[1]],
+     covariate = "habitat",
+     pch = 15,
+     cex = 1.2,
+     add = TRUE)
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+#session 2 
+plot(clippedmask, border = 100, ppoly = FALSE)
+plot(clippedmask[[2]],
+     covariate = "habitat",
+     pch = 15,
+     cex = 1.2,
+     add = TRUE)
+plot(traps(ch[[2]]), add = TRUE, pch = 16)
+
+
+# MAY NEED TO REVISIT GRAPHING BUFFER V DENSITY ################################
+
+
+# Exploring modeling ###########################################################
+m0 <- secr.fit(
+  ch,
+  mask = clippedmask,
+  model = list(D ~ 1, g0 ~ 1, sigma ~ 1),
+  detectfn = "halfnormal",
+  trace = FALSE
+) #error in mask structure
+
+class(clippedmask)
+str(clippedmask)
+
+summary(clippedmask)
+
+head(clippedmask[[1]]$x)
+head(clippedmask[[1]]$y)
+length(clippedmask[[1]]$x)
+length(clippedmask[[1]]$y)
+
+verify(clippedmask) #error
+verify(ch) #no errors
+
+verify(clippedmask[1])
 #explore distance to "Urban x" CLASS......................
+
+
+#trial of clean restart.............
+# rebuild masks cleanly
+clippedmask <- list(
+  make.mask(traps(ch[[1]]), type="trapbuffer", buffer=8000, poly=island_boundary),
+  make.mask(traps(ch[[2]]), type="trapbuffer", buffer=8000, poly=island_boundary)
+)
+
+# re-add covariates AFTER rebuilding
+for(i in 1:2){
+  m <- clippedmask[[i]]
+  
+  xy <- cbind(m$x, m$y)
+  
+  covariates(m)$habitat <- terra::extract(habitat_fill, xy)$Habitat_ID
+  
+  clippedmask[[i]] <- m
+}
+
+# verify individually
+verify(clippedmask[[1]])
+verify(clippedmask[[2]])
+verify(clippedmask)
+
+class(clippedmask)
+
+class(clippedmask) <- "mask"
+attr(clippedmask, "type") <- "trapbuffer"
+
+#trial of defining session masks as lists
+masklist <- list(`1` = clippedmask[[1]],
+                 `2` = clippedmask[[2]])
+
+class(masklist)
+verify(masklist) #nope
+
+anyNA(masklist[[1]]$x)
+anyNA(masklist[[1]]$y)
+anyNA(masklist[[2]]$x)
+anyNA(masklist[[2]]$y)
+
+#try again..... worked :)
+m1 <- clippedmask[[1]]
+m2 <- clippedmask[[2]]
+
+attr(m1, "type") <- "trapbuffer"
+attr(m2, "type") <- "trapbuffer"
+
+masklist <- list(`1` = m1, `2` = m2)
+
+class(masklist) <- c("mask", "list")   # sometimes required
+
+# then fit
+m0 <- secr.fit(ch, mask = masklist,
+               model = list(D~1, g0~1, sigma~1),
+               detectfn="halfnormal")
+
+m0
+
+names(covariates(masklist)) #NOPE ---> BIG ISSUE.............................
+
+m0 <- secr.fit(ch, mask = masklist,
+               model = list(D~Habitat_ID, g0~1, sigma~1),
+               detectfn="halfnormal")
+
 
 # Create effort matrix function ################################################
 make_usage_matrix <- function(session_num, traps_df, deploy_df, n_occasions = 6) {

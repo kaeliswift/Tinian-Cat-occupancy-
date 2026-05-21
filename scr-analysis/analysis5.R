@@ -196,12 +196,117 @@ abline(v=7000, col ="red",lty =2)
 
 suggest.buffer(cats.HN7000) #both ~11000 m -> weird
 
-#run the null model with a half normal detection
-cats.HN<-secr.fit(ch, buffer=8000, trace = FALSE, CL = TRUE)
 
-predict(cats.HN)
 
-esaPlot(cats.HN)
+#Checking D estimates & changes in buffer size #################################
+#OK... next moves before models......
+#graph buffer sizes & D estimates
+#decide on final buffer
+
+#Exploring buffer sizes
+buffers <- c(3000, 5000, 7000, 9000, 11000) #checking 3 km to 11 km 
+
+#read in shapefile data
+tinian <- st_read(
+  "C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp"
+)
+
+# make sure CRS matches traps
+st_crs(tinian)
+
+# dissolve polygons into single island boundary
+island_boundary <- st_union(tinian)
+
+# run function that changes buffer to calculate several D estimates
+fits <- lapply(buffers, function(b) { #THIS WILL TAKE A LOT OF TIME 
+  
+  mask_b <- make.mask(
+    traps(ch),
+    buffer = b,
+    spacing = 250, #can change this
+    type = "trapbuffer", #restricts the grid to points within distance buffer of any detector.
+    poly = vect(island_boundary)
+  )
+  
+  secr.fit(
+    ch,
+    mask = mask_b,
+    detectfn = 0   # half normal
+  )
+})
+
+
+saveRDS(fits, file = "D_buffer_fits.rds")
+fits <- readRDS("D_buffer_fits.rds")
+
+
+# extract density values (D) from fits
+D_values <- sapply(fits, function(fit) {
+  sapply(derived(fit), function(x) x["D","estimate"])
+})
+
+#plot estimates vs buffer size
+D_df <- as.data.frame(t(D_values))
+colnames(D_df) <- c("Session1", "Session2")
+
+D_df$buffer <- buffers
+
+D_long <- D_df %>%
+  pivot_longer(cols = starts_with("Session"),
+               names_to = "Session",
+               values_to = "D")
+
+ggplot(D_long, aes(x = buffer, y = D, color = Session)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Density vs Buffer Size",
+       x = "Buffer (m)",
+       y = "Density (D)") +
+  theme_minimal()
+
+
+#separate session plots: PAY CLOSE ATTENTION TO Y-VALUES
+ggplot(subset(D_long, Session == "Session1"),
+       aes(x = buffer, y = D)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Session 1: Density vs Buffer Size",
+       x = "Buffer (m)",
+       y = "Density (D)") +
+  theme_minimal()
+
+ggplot(subset(D_long, Session == "Session2"),
+       aes(x = buffer, y = D)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Session 2: Density vs Buffer Size",
+       x = "Buffer (m)",
+       y = "Density (D)") +
+  theme_minimal()
+
+
+#checking if D estimate stabilizes by looking at values
+
+#session 1
+sapply(fits, function(fit) {
+  derived(fit)[[1]]["D","estimate"]}) #shows D estimates
+#session 2 
+sapply(fits, function(fit) {
+  derived(fit)[[2]]["D","estimate"]}) #shows D estimates
+
+#both sessions 
+sapply(fits, function(fit) {sapply(derived(fit), function(x) x["D","estimate"])})
+
+#graphing
+D_values <- sapply(fits, function(fit) {
+  sapply(derived(fit), function(x) x["D","estimate"])
+})
+
+matplot(buffers, t(D_values), type = "b", pch = 1:2, col = 1:2,
+        xlab = "Buffer (m)", ylab = "D estimate", lty = 1:2)
+legend("topright", legend=c("Session 1","Session 2"), pch=1:2, lty=1:2)
+
+#Choosing Buffer = 7000 for now!!!!!!!!
 
 # Set Mask: IGNORE FOR NOW #####################################################################
 tinian <- st_read("C:/Users/celin/Tinian-Cat-occupancy-/scr-analysis/CNMI Hi-Res veg data/tinian_release.shp") 
@@ -518,10 +623,7 @@ plot(clippedmask[[2]],
 plot(traps(ch[[2]]), add = TRUE, pch = 16)
 
 
-# MAY NEED TO REVISIT GRAPHING BUFFER V DENSITY ################################
-
-
-# Exploring modeling ###########################################################
+# Exploring modeling: IGNORE ###########################################################
 m0 <- secr.fit(
   ch,
   mask = clippedmask,
@@ -874,6 +976,24 @@ plot(traps(ch[[1]]), add = TRUE, pch = 16)
 
 plot(masklist[[1]], covariate = "d.to.shore", pch = 15, cex = 0.6)
 plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+#other mask trials
+plot(clippedmask, border = 100, ppoly = FALSE)
+plot(clippedmask[[1]],
+     covariate = "habitat",
+     pch = 15,
+     cex = 1.2,
+     add = TRUE)
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+#session 2 
+plot(clippedmask, border = 100, ppoly = FALSE)
+plot(clippedmask[[2]],
+     covariate = "habitat",
+     pch = 15,
+     cex = 1.2,
+     add = TRUE)
+plot(traps(ch[[2]]), add = TRUE, pch = 16)
 
 #plot mask extent
 plot(

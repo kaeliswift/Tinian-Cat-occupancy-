@@ -14,5 +14,6 @@ I put a pause on that to push forward and get a secr model running, but that cod
 The two R scripts that start with try1, you can skip. 
 They are failed attempts of mine (I am just holding on to them right now if the script becomes useful). 
 
-analysis2.R is a trial that incorporates code from Beth's SCR workshop. It is a work in progress...
+The most recent R script is analysisX.R with the highest number
+ (ex. currently the best preforming script is analysis5.R). It is a work in progress...
 

@@ -324,6 +324,14 @@ island_boundary <- st_union(tinian)
 
 plot(st_geometry(island_boundary)) #shows island boundary
 
+# create spatial polygon
+island_sp <- as(
+  st_cast(island_boundary, "MULTIPOLYGON"),
+  "Spatial"
+)
+
+plot(island_sp)
+
 # 2. reclassify habitat...............
 tinian <- tinian %>%
   mutate(
@@ -357,12 +365,6 @@ habitat_raster <- rasterize(
   field = "habitat",
 )
 
-habitat_raster <- rasterize(
-  tinian_v,
-  r,
-  field = "habitat"
-)
-
 plot(habitat_raster) #nice
 
 # 4. build session masks separately...........
@@ -375,15 +377,42 @@ masklist <- lapply(
   1:2,
   function(i){
     
+    # -------------------------
+    # BUILD TRAPBUFFER MASK
+    # -------------------------
+    
     m <- make.mask(
       traps(ch[[i]]),
       type = "trapbuffer",
       buffer = 7000,
-      spacing = 250,
-      poly = vect(island_boundary)
+      spacing = 250
     )
     
-    # coordinates
+    # -------------------------
+    # CLIP TO ISLAND EXTENT
+    # -------------------------
+    
+    # convert mask points to sf
+    mask_sf <- st_as_sf(
+      data.frame(x = m$x, y = m$y),
+      coords = c("x", "y"),
+      crs = st_crs(tinian)
+    )
+    
+    # identify points inside island polygon
+    inside <- st_intersects(
+      mask_sf,
+      island_boundary,
+      sparse = FALSE
+    )[,1]
+    
+    # keep only inside points
+    m <- m[inside, ]
+    
+    # -------------------------
+    # COORDINATES
+    # -------------------------
+    
     xy <- cbind(m$x, m$y)
     
     # -------------------------
@@ -400,27 +429,26 @@ masklist <- lapply(
     covariates(m)$habitat <-
       relevel(
         covariates(m)$habitat,
-        ref = "native_limestone"
+        ref = "tangantangan"
       )
     
     # -------------------------
     # DISTANCE TO SHORE
     # -------------------------
     
-    # convert mask points to sf
+    # convert clipped mask points to sf
     pts <- st_as_sf(
       data.frame(x = m$x, y = m$y),
       coords = c("x", "y"),
       crs = st_crs(tinian)
     )
     
-    # calculate distance to shoreline
+    # distance to shoreline
     dshore <- st_distance(
       pts,
       shoreline
     )
     
-    # convert units matrix to numeric vector
     covariates(m)$d.to.shore <- as.numeric(dshore)
     
     m
@@ -441,6 +469,17 @@ verify(masklist) #issue
 names(covariates(masklist[[1]]))
 names(covariates(masklist[[2]]))
 
+plot(island_sp)
+plot(masklist[[1]], pch = 15, cex = 0.3, add = TRUE)
+
+plot(island_sp)
+plot(masklist[[2]], pch = 15, cex = 0.3, add = TRUE)
+
+class(masklist[[1]])
+class(masklist[[2]])
+
+attributes(masklist[[1]])
+attributes(masklist[[2]])
 
 # 5. replace blanks in habitat with NA............
 for(i in 1:2){
@@ -503,6 +542,14 @@ masklist[[2]] <- m
 class(masklist) <- c("mask", "list")
 verify(masklist)
 
+plot(masklist[[1]], pch = 15, cex = 0.4)
+plot(traps(ch[[1]]), add = TRUE, col = "red", pch = 16)
+
+plot(masklist[[2]], pch = 15, cex = 0.4)
+plot(traps(ch[[2]]), add = TRUE, col = "red", pch = 16)
+
+plot(masklist) #weird that session 1 is so different
+
 # 7. graph mask.........................
 # raw data
 plot(masklist[[1]], covariate = "habitat", pch = 15, cex = 0.6)
@@ -547,6 +594,44 @@ plot(traps(ch[[2]]), add = TRUE, pch = 16)
 # 8. save mask..............
 saveRDS(masklist, file = "masklist.rds")
 masklist <- readRDS("masklist.rds")
+
+# 8a. checking mismatch of traps and mask.........
+plot(masklist)
+plot(traps(ch[[1]]), add = TRUE, col = "red", pch = 16)
+plot(traps(ch[[2]]), add = TRUE, col = "red", pch = 16)
+
+st_crs(tinian) 
+st_crs(traps.sf) #good both are the same projection
+
+
+# session 1
+tr1 <- as.data.frame(traps(ch[[1]]))
+
+xr <- range(masklist[[1]]$x)
+yr <- range(masklist[[1]]$y)
+
+tr1$inside_extent <-
+  tr1$x >= xr[1] &
+  tr1$x <= xr[2] &
+  tr1$y >= yr[1] &
+  tr1$y <= yr[2]
+
+table(tr1$inside_extent) # good
+
+# session 2
+tr2 <- as.data.frame(traps(ch[[2]]))
+
+xr <- range(masklist[[2]]$x)
+yr <- range(masklist[[2]]$y)
+
+tr2$inside_extent <-
+  tr2$x >= xr[1] &
+  tr2$x <= xr[2] &
+  tr2$y >= yr[1] &
+  tr2$y <= yr[2]
+
+table(tr2$inside_extent) # good
+
 
 # 9. try modelling..............
 # null model

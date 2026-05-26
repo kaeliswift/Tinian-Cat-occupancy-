@@ -683,7 +683,7 @@ summary(m0EX)
 AIC(m0, m0HR, m0EX) #HR is best preforming detection rate but using HN for now because its estimates look better
 
 # continuing on with half normal detection rate for now 
-# habitat model
+# habitat model...................
 table(covariates(masklist[[1]])$habitat)
 table(covariates(masklist[[2]])$habitat) #largest value needs to be reference level -> tangantangan
 
@@ -699,7 +699,7 @@ mDhabitat <- secr.fit(
 )
 
 summary(mDhabitat)
-AIC(m0, mDhabitat) #habitat is better by 7 AIC
+AIC(m0, mDhabitat) #habitat is better by 10 AIC
 
 saveRDS(mDhabitat, file = "mDhabitat.rds")
 mDhabitat <- readRDS("mDhabitat.rds")
@@ -709,7 +709,7 @@ hold=predictDsurface(mDhabitat, mask = masklist, se.D = FALSE, cl.D = FALSE, alp
 plot(hold)   #this one is boring cause we have no variation on D
 
 
-# session model 
+# session model .......................
 mDsession <- secr.fit(
   ch,
   mask = masklist,
@@ -727,7 +727,7 @@ AIC(m0, mDhabitat, mDsession) #worse than the null model
 saveRDS(mDsession, file = "mDsession.rds")
 mDsession <- readRDS("mDsession.rds")
 
-# distance to shore model
+# distance to shore model ...............
 #first scale the covariate
 for(i in 1:2){
   covariates(masklist[[i]])$d.to.shore <-
@@ -767,6 +767,45 @@ mg0habitat <- secr.fit(
   detectfn = "halfnormal"
 ) #fails b/c need same covariate levels in each session (do not match rn)
 
+# get all site_habitat levels
+all_levels <- sort(unique(unlist(lapply(ch, function(x) {
+  covariates(traps(x))$site_habitat
+}))))
+
+# enforce all levels in each session
+for (s in seq_along(ch)) {
+  tr <- traps(ch[[s]])
+  
+  covs <- covariates(tr)
+  
+  covs$site_habitat <- factor(covs$site_habitat,
+                              levels = all_levels)
+  
+  covariates(tr) <- covs
+  traps(ch[[s]]) <- tr
+}
+
+# verify that all levels are in each session
+lapply(ch, function(x) levels(covariates(traps(x))$site_habitat))
+
+# try refitting the model
+mg0habitat <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ 1,
+    g0 ~ site_habitat,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(mg0habitat)
+AIC(m0, mDhabitat, mDsession, mDshore, mg0habitat) #not comparable 
+AIC(m0, mg0habitat) #lower AIC but somehow still not comparable
+
+saveRDS(mg0habitat, file = "mg0habitat.rds")
+mg0habitat <- readRDS("mg0habitat.rds")
 
 # Create effort matrix function ################################################
 make_usage_matrix <- function(session_num, traps_df, deploy_df, n_occasions = 6) {

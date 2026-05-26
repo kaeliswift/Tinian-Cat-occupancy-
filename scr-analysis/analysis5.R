@@ -542,10 +542,12 @@ masklist[[2]] <- m
 class(masklist) <- c("mask", "list")
 verify(masklist)
 
-plot(masklist[[1]], pch = 15, cex = 0.4)
+plot(island_sp)
+plot(masklist[[1]], pch = 15, cex = 0.4, add = TRUE)
 plot(traps(ch[[1]]), add = TRUE, col = "red", pch = 16)
 
-plot(masklist[[2]], pch = 15, cex = 0.4)
+plot(island_sp)
+plot(masklist[[2]], pch = 15, cex = 0.4, add = TRUE)
 plot(traps(ch[[2]]), add = TRUE, col = "red", pch = 16)
 
 plot(masklist) #weird that session 1 is so different
@@ -705,9 +707,15 @@ saveRDS(mDhabitat, file = "mDhabitat.rds")
 mDhabitat <- readRDS("mDhabitat.rds")
 
 #try graphing
-hold=predictDsurface(mDhabitat, mask = masklist, se.D = FALSE, cl.D = FALSE, alpha =0.05)
+#session 1
+hold=predictDsurface(mDhabitat, mask = masklist[[1]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
 plot(hold)   #this one is boring cause we have no variation on D
+plot(traps(ch[[1]]),  add = TRUE, col = "red", pch = 16)
 
+#session 2
+hold=predictDsurface(mDhabitat, mask = masklist[[2]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
+plot(hold)   #this one is boring cause we have no variation on D
+plot(traps(ch[[2]]),  add = TRUE, col = "red", pch = 16)
 
 # session model .......................
 mDsession <- secr.fit(

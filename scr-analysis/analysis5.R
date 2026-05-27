@@ -161,8 +161,8 @@ covariates(traps2) <- data.frame(site_habitat = traps_year2$CLASS.landcover)
 traps(ch[[1]]) <- traps1
 traps(ch[[2]]) <- traps2
 
-covariates(traps(ch[[1]])) #worked
-covariates(traps(ch[[2]]))
+table(covariates(traps(ch[[1]]))) #worked
+table(covariates(traps(ch[[2]])))
 
 
 # Inspect ch ###################################################################
@@ -189,13 +189,15 @@ cats.HN7000 <-secr.fit(ch, buffer=7000, trace = FALSE)
 
 cats.HN7000 
 
+cats.mask <- secr.fit(ch, mask=masklist, trace = FALSE)
+
 #plot buffer width (m) x n/esa(buffer)ha
 par(pty = "s",mar = c(4,4,2,2),mgp =c(2.5,0.8,0),las =1)
 esaPlot(cats.HN7000,ylim =c(0,4))
 abline(v=7000, col ="red",lty =2)
 
 suggest.buffer(cats.HN7000) #both ~11000 m -> weird
-
+suggest.buffer(cats.mask) #8000 and 9000 m -> not as bad
 
 
 #Checking D estimates & changes in buffer size #################################
@@ -339,7 +341,7 @@ tinian <- tinian %>%
       grepl("Leucaena", CLASS) ~ "tangantangan",
       grepl("Mixed", CLASS) ~ "mixed_introduced",
       grepl("Casuarina", CLASS) ~ "ironwood",
-      grepl("Other", CLASS) ~ "shrub_grass",
+      grepl("Other", CLASS) ~ "shrub_g]rass",
       grepl("Native", CLASS) ~ "native_limestone",
       TRUE ~ NA_character_
     )
@@ -561,7 +563,7 @@ plot(masklist[[1]], covariate = "d.to.shore", pch = 15, cex = 0.6)
 plot(traps(ch[[1]]), add = TRUE, pch = 16)
 
 #other mask trials.... includes trapbuffer
-plot(masklist, border = 100, ppoly = FALSE)
+plot(masklist[[1]], border = 100, ppoly = FALSE)
 plot(masklist[[1]],
      covariate = "habitat",
      pch = 15,
@@ -570,7 +572,7 @@ plot(masklist[[1]],
 plot(traps(ch[[1]]), add = TRUE, pch = 16)
 
 #session 2
-plot(masklist, border = 100, ppoly = FALSE)
+plot(masklist[[2]], border = 100, ppoly = FALSE)
 plot(masklist[[2]],
      covariate = "habitat",
      pch = 15,
@@ -598,14 +600,25 @@ saveRDS(masklist, file = "masklist.rds")
 masklist <- readRDS("masklist.rds")
 
 # 8a. checking mismatch of traps and mask.........
-plot(masklist)
+plot(masklist) #looks like session 2
 plot(traps(ch[[1]]), add = TRUE, col = "red", pch = 16)
 plot(traps(ch[[2]]), add = TRUE, col = "red", pch = 16)
 
 st_crs(tinian) 
 st_crs(traps.sf) #good both are the same projection
 
+#actual plots
+#session 1
+plot(island_sp)
+plot(masklist[[1]], add = TRUE) 
+plot(traps(ch[[1]]), add = TRUE, col = "red", pch = 16)
 
+#session 2
+plot(island_sp)
+plot(masklist[[2]], add = TRUE) 
+plot(traps(ch[[2]]), add = TRUE, col = "red", pch = 16)
+
+#check that masks cover the camera traps.......
 # session 1
 tr1 <- as.data.frame(traps(ch[[1]]))
 
@@ -706,6 +719,12 @@ AIC(m0, mDhabitat) #habitat is better by 10 AIC
 saveRDS(mDhabitat, file = "mDhabitat.rds")
 mDhabitat <- readRDS("mDhabitat.rds")
 
+plot(masklist[[1]], covariate = "habitat")
+plot(traps(ch[[1]]), add = TRUE)
+
+plot(masklist[[2]], covariate = "habitat")
+plot(traps(ch[[2]]), add = TRUE)
+
 #try graphing
 #session 1
 hold=predictDsurface(mDhabitat, mask = masklist[[1]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
@@ -763,6 +782,9 @@ mDshore <- readRDS("mDshore.rds")
 hold2=predictDsurface(mDhabitat, mask = masklist, se.D = FALSE, cl.D = FALSE, alpha =0.05)
 plot(hold2)  
 
+esaPlot(mDshore) # good
+plot(mDshore)
+
 # g0 ~ site_habitat
 mg0habitat <- secr.fit(
   ch,
@@ -809,7 +831,7 @@ mg0habitat <- secr.fit(
 )
 
 summary(mg0habitat)
-AIC(m0, mDhabitat, mDsession, mDshore, mg0habitat) #not comparable 
+AIC(m0, mDhabitat, mDsession, mDshore) #not comparable 
 AIC(m0, mg0habitat) #lower AIC but somehow still not comparable
 
 saveRDS(mg0habitat, file = "mg0habitat.rds")

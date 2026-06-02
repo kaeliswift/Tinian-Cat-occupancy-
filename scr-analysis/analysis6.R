@@ -467,6 +467,7 @@ masklist <- lapply(
     # -------------------------
     # MLA ACTIVITY ZONES -- no buffer around area rn.... may need to change
     # -------------------------
+    #inside or outside high activity MLA areas
     inside_MLA <- st_intersects(
       pts,
       MLA_activity,
@@ -482,6 +483,14 @@ masklist <- lapply(
              "inside",
              "outside")
     )
+    
+    # distance from high activity MLA areas
+    dMLA <- st_distance(
+      pts,
+      MLA_activity
+    )
+    
+    covariates(m)$d.to.MLA <- as.numeric(apply(dMLA, 1, min)) #select only nearest road
     
     m
   }
@@ -509,6 +518,10 @@ summary(covariates(masklist[[2]])$d.to.road)
 summary(covariates(masklist[[1]])$MLA)
 summary(covariates(masklist[[2]])$MLA)
 
+# check distance to MLA activity zones
+summary(covariates(masklist[[1]])$d.to.MLA)
+summary(covariates(masklist[[2]])$d.to.MLA)
+
 # summary of each session mask
 summary(masklist[[1]])
 summary(masklist[[2]])
@@ -523,6 +536,7 @@ names(covariates(masklist[[1]]))
 names(covariates(masklist[[2]]))
 
 # check numeric covariate correlation (r > 0.5 not good)
+# distance to shore & road correlation check
 cor(
   covariates(masklist[[1]])$d.to.shore,
   covariates(masklist[[1]])$d.to.road
@@ -532,6 +546,30 @@ cor(
   covariates(masklist[[2]])$d.to.shore,
   covariates(masklist[[2]])$d.to.road
 ) #good
+
+# distance to road & MLA activity area correlation check
+cor(
+  covariates(masklist[[1]])$d.to.road,
+  covariates(masklist[[1]])$d.to.MLA
+) #good
+
+cor(
+  covariates(masklist[[2]])$d.to.road,
+  covariates(masklist[[2]])$d.to.MLA
+) #good
+
+# distance to shore & MLA activity area correlation check
+cor(
+  covariates(masklist[[1]])$d.to.shore,
+  covariates(masklist[[1]])$d.to.MLA
+) #good
+
+cor(
+  covariates(masklist[[2]])$d.to.shore,
+  covariates(masklist[[2]])$d.to.MLA
+) #good
+
+
 
 # plot each session mask
 plot(island_poly)
@@ -656,6 +694,15 @@ plot(traps(ch[[1]]), add = TRUE, pch = 16)
 
 plot(island_poly)
 plot(masklist[[2]], covariate = "MLA", pch = 15, cex = 0.6, add = TRUE)
+plot(traps(ch[[2]]), add = TRUE, pch = 16)
+
+# distance to high MLA activity areas
+plot(island_poly)
+plot(masklist[[1]], covariate = "d.to.MLA", pch = 15, cex = 0.6, add = TRUE)
+plot(traps(ch[[1]]), add = TRUE, pch = 16)
+
+plot(island_poly)
+plot(masklist[[2]], covariate = "d.to.MLA", pch = 15, cex = 0.6, add = TRUE)
 plot(traps(ch[[2]]), add = TRUE, pch = 16)
 
 # 8. save mask..............
@@ -818,10 +865,20 @@ mDsession <- readRDS("mDsession.rds")
 
 # distance to shore model ...............
 #first scale the covariate
-for(i in 1:2){
-  covariates(masklist[[i]])$d.to.shore <-
-    scale(covariates(masklist[[i]])$d.to.shore)
+for(i in 1:2) {
+  
+  cv <- covariates(masklist[[i]])
+  
+  cv$d.to.shore <- as.numeric(
+    scale(cv$d.to.shore)
+  )
+  
+  covariates(masklist[[i]]) <- cv
 }
+
+#check that they are scaled
+summary(covariates(masklist[[1]])$d.to.shore)
+summary(covariates(masklist[[2]])$d.to.shore)
 
 mDshore <- secr.fit(
   ch,
@@ -841,18 +898,64 @@ saveRDS(mDshore, file = "mDshore.rds")
 mDshore <- readRDS("mDshore.rds")
 
 #try graphing
-hold2=predictDsurface(mDhabitat, mask = masklist, se.D = FALSE, cl.D = FALSE, alpha =0.05)
+hold2=predictDsurface(mDshore, mask = masklist, se.D = FALSE, cl.D = FALSE, alpha =0.05)
 plot(hold2)  
+
+#session 1
+hold=predictDsurface(mDshore, mask = masklist[[1]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
+plot(island_poly)
+plot(hold, add = TRUE)  
+plot(traps(ch[[1]]),  add = TRUE, col = "red", pch = 16)
+
+#session 2
+hold=predictDsurface(mDshore, mask = masklist[[2]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
+plot(island_poly)
+plot(hold, add = TRUE)  
+plot(traps(ch[[2]]),  add = TRUE, col = "red", pch = 16)
+
 
 esaPlot(mDshore) # good
 plot(mDshore)
 
+
+#trial of activity centers: session 1.... not session specific -> will need to improve
+xy <- as.data.frame(masklist[[1]])
+get_ac <- function(p, xy) {
+  w <- p / sum(p, na.rm = TRUE)
+  
+  xhat <- sum(xy$x * w)
+  yhat <- sum(xy$y * w)
+  
+  c(x = xhat, y = yhat)
+}
+ac <- t(sapply(fx, get_ac, xy = xy))
+head(ac)
+
+plot(masklist[[1]])
+points(ac[,1], ac[,2], pch = 16, col = "blue")
+plot(traps(ch[[1]]),  add = TRUE, col = "red", pch = 16)
+
+
+#abundance
+N_hat <- predict(mDshore, type = "count")
+N_hat
+
 # distance to nearest road model ...............
 #first scale the covariate
-for(i in 1:2){
-  covariates(masklist[[i]])$d.to.road <-
-    scale(covariates(masklist[[i]])$d.to.road)
+for(i in 1:2) {
+  
+  cv <- covariates(masklist[[i]])
+  
+  cv$d.to.road <- as.numeric(
+    scale(cv$d.to.road)
+  )
+  
+  covariates(masklist[[i]]) <- cv
 }
+
+#check that they are scaled
+summary(covariates(masklist[[1]])$d.to.road)
+summary(covariates(masklist[[2]])$d.to.road)
 
 mDroad <- secr.fit(
   ch,
@@ -872,7 +975,6 @@ saveRDS(mDroad, file = "mDroad.rds")
 mDroad <- readRDS("mDroad.rds")
 
 # Inside/outside MLA activity areas model ...............
-#first scale the covariate
 mDMLA <- secr.fit(
   ch,
   mask = masklist,
@@ -890,39 +992,93 @@ AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA)
 saveRDS(mDMLA, file = "mDMLA.rds")
 mDMLA <- readRDS("mDMLA.rds")
 
-# Trying g0 covariates..........................................................
-# g0 ~ site_habitat
-mg0habitat <- secr.fit(
+# Distance to MLA activity areas model ...............
+#first scale the covariate
+for(i in 1:2) {
+  
+  cv <- covariates(masklist[[i]])
+  
+  cv$d.to.MLA <- as.numeric(
+    scale(cv$d.to.MLA)
+  )
+  
+  covariates(masklist[[i]]) <- cv
+}
+
+#check that they are scaled
+summary(covariates(masklist[[1]])$d.to.MLA)
+summary(covariates(masklist[[2]])$d.to.MLA)
+
+mDd.to.MLA <- secr.fit(
   ch,
   mask = masklist,
   model = list(
-    D ~ 1,
-    g0 ~ site_habitat,
+    D ~ d.to.MLA,
+    g0 ~ 1,
     sigma ~ 1
   ),
   detectfn = "halfnormal"
-) #fails b/c need same covariate levels in each session (do not match rn)
+)
 
-# get all site_habitat levels
-all_levels <- sort(unique(unlist(lapply(ch, function(x) {
-  covariates(traps(x))$site_habitat
-}))))
+summary(mDd.to.MLA)
+AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA)
 
-# enforce all levels in each session
+saveRDS(mDd.to.MLA, file = "mDd.to.MLA.rds")
+mDd.to.MLA <- readRDS("mDd.to.MLA.rds")
+
+
+# Trying g0 covariates..........................................................
+# g0 ~ site_habitat
+#mg0habitat <- secr.fit(
+ # ch,
+  #mask = masklist,
+  #model = list(
+   # D ~ 1,
+    #g0 ~ site_habitat,
+    #sigma ~ 1
+  #),
+  #detectfn = "halfnormal"
+#) #fails b/c need same covariate levels in each session (do not match rn)
+
+# remove ironwood
+# recode Casuarina -> Mixed Introduced Forest
 for (s in seq_along(ch)) {
-  tr <- traps(ch[[s]])
   
+  tr <- traps(ch[[s]])
   covs <- covariates(tr)
   
-  covs$site_habitat <- factor(covs$site_habitat,
-                              levels = all_levels)
+  covs$site_habitat[
+    covs$site_habitat == "Casuarina Thicket"
+  ] <- "Mixed Introduced Forest"
   
   covariates(tr) <- covs
   traps(ch[[s]]) <- tr
 }
 
-# verify that all levels are in each session
-lapply(ch, function(x) levels(covariates(traps(x))$site_habitat))
+# get all site_habitat levels after recoding
+all_levels <- sort(unique(unlist(lapply(ch, function(x) {
+  covariates(traps(x))$site_habitat
+}))))
+
+# enforce same levels in each session
+for (s in seq_along(ch)) {
+  
+  tr <- traps(ch[[s]])
+  covs <- covariates(tr)
+  
+  covs$site_habitat <- factor(
+    covs$site_habitat,
+    levels = all_levels
+  )
+  
+  covariates(tr) <- covs
+  traps(ch[[s]]) <- tr
+}
+
+#check it worked 
+lapply(ch, function(x)
+  levels(covariates(traps(x))$site_habitat)
+)
 
 # try refitting the model
 mg0habitat <- secr.fit(
@@ -939,6 +1095,7 @@ mg0habitat <- secr.fit(
 summary(mg0habitat)
 AIC(m0, mDhabitat, mDsession, mDshore) #not comparable 
 AIC(m0, mg0habitat) #lower AIC but somehow still not comparable
+
 
 saveRDS(mg0habitat, file = "mg0habitat.rds")
 mg0habitat <- readRDS("mg0habitat.rds")

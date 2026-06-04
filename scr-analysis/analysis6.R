@@ -1027,6 +1027,94 @@ saveRDS(mDd.to.MLA, file = "mDd.to.MLA.rds")
 mDd.to.MLA <- readRDS("mDd.to.MLA.rds")
 
 
+# distance to shore ^2.............................
+
+#check that they are scaled
+summary(covariates(masklist[[1]])$d.to.shore)
+summary(covariates(masklist[[2]])$d.to.shore)
+
+mDshoresq <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ d.to.shore + I(d.to.shore^2),
+    g0 ~ 1,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(mDshoresq)
+AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, mDshoresq)
+
+saveRDS(mDshoresq, file = "mDshoresq.rds")
+mDshoresq <- readRDS("mDshoresq.rds")
+
+# distance to road ^3...................
+summary(covariates(masklist[[1]])$d.to.shore)
+summary(covariates(masklist[[2]])$d.to.shore)
+
+mDshorecubed <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ d.to.shore + I(d.to.shore^2) + I(d.to.shore^3),
+    g0 ~ 1,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(mDshorecubed)
+AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, mDshoresq, mDshorecubed)
+
+saveRDS(mDshorecubed, file = "mDshorecubed.rds")
+mDshorecubed <- readRDS("mDshorecubed.rds")
+
+# distance to road ^2.............................
+summary(covariates(masklist[[1]])$d.to.road)
+summary(covariates(masklist[[2]])$d.to.road)
+
+mDroadsq <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ d.to.road + I(d.to.road^2),
+    g0 ~ 1,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+) #failed.....
+
+
+
+# distance to shore + distance to road.................................
+#check that they are scaled
+summary(covariates(masklist[[1]])$d.to.shore)
+summary(covariates(masklist[[2]])$d.to.shore)
+
+summary(covariates(masklist[[1]])$d.to.road)
+summary(covariates(masklist[[2]])$d.to.road)
+
+mDshore.road <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ d.to.shore + d.to.road,
+    g0 ~ 1,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(mDshore.road)
+AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, mDshoresq, mDshore.road)
+
+saveRDS(mDshore.road, file = "mDshore.road.rds")
+mDshore.road <- readRDS("mDshore.road.rds")
+
+
+
 # Trying g0 covariates..........................................................
 # g0 ~ site_habitat
 #mg0habitat <- secr.fit(

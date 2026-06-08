@@ -681,10 +681,12 @@ plot(traps(ch[[2]]), add = TRUE, pch = 16)
 # d to road
 plot(island_poly)
 plot(masklist[[1]], covariate = "d.to.road", pch = 15, cex = 0.6, add = TRUE)
+plot(roads, add = TRUE)
 plot(traps(ch[[1]]), add = TRUE, pch = 16)
 
 plot(island_poly)
 plot(masklist[[2]], covariate = "d.to.road", pch = 15, cex = 0.6, add = TRUE)
+plot(roads, add = TRUE)
 plot(traps(ch[[2]]), add = TRUE, pch = 16)
 
 # high MLA activity areas
@@ -1108,7 +1110,7 @@ mDshore.road <- secr.fit(
 )
 
 summary(mDshore.road)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, mDshoresq, mDshore.road)
+AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, mDshoresq, mDshore.road, mDshorecubed)
 
 saveRDS(mDshore.road, file = "mDshore.road.rds")
 mDshore.road <- readRDS("mDshore.road.rds")
@@ -1234,6 +1236,181 @@ make_usage_matrix <- function(session_num, traps_df, deploy_df, n_occasions = 6)
   
   usage_mat
 }
+
+# Inspect ch ###################################################################
+summary(ch)
+plot(ch, tracks = TRUE)
+
+usage(traps(ch[[1]]))[1:42, ] #currently no usage -> ran into errors due to full usage in session 2& partial usage in session 1
+usage(traps(ch[[2]]))[1:8, ]                      # session 1 is still mainly covered so will ignore usage for now 
+
+# ch for session 1
+plot(island_poly)
+plot(ch[[1]], tracks = TRUE, add = TRUE)
+
+#ch for session 2
+plot(island_poly)
+plot(ch[[2]], tracks = TRUE, add = TRUE)
+
+
+
+# individuals for session 1...........
+ids <- rownames(ch[[1]])
+
+par(mfrow = c(2,3))
+
+for (id in ids) {
+  
+  ch.ind <- subset(ch[[1]], subset = id)
+  
+  plot(island_poly, axes = FALSE)
+  
+  suppressWarnings(
+    plot(ch.ind,
+         tracks = TRUE,
+         add = TRUE)
+  )
+  
+  mtext(id, side = 2, line = 0.2, cex = 0.8)
+}
+
+# generate pdf 
+pdf("individual_tracks_session1.pdf",
+    width = 11,
+    height = 8.5)
+
+ids <- rownames(ch[[1]])
+
+par(mfrow = c(2,3), mar = c(1,1,2,1))
+
+for (id in ids) {
+  
+  ch.ind <- subset(ch[[1]], subset = id)
+  
+  plot(island_poly, axes = FALSE)
+  
+  suppressWarnings(
+    plot(ch.ind,
+         tracks = TRUE,
+         add = TRUE)
+  )
+  
+  mtext(id, side = 2, line = 0.2, cex = 0.8)
+}
+
+dev.off()
+
+# individuals for session 2 ...........
+# generate pdf 
+pdf("individual_tracks_session2.pdf",
+    width = 11,
+    height = 8.5)
+
+ids <- rownames(ch[[2]])
+
+par(mfrow = c(2,3), mar = c(1,1,2,1))
+
+for (id in ids) {
+  
+  ch.ind <- subset(ch[[2]], subset = id)
+  
+  plot(island_poly, axes = FALSE)
+  
+  suppressWarnings(
+    plot(ch.ind,
+         tracks = TRUE,
+         add = TRUE)
+  )
+  
+  mtext(id, side = 2, line = 0.2, cex = 0.8)
+}
+
+dev.off()
+
+# detections session 1
+detections <- apply(ch[[1]], 1, sum)
+
+det.table <- data.frame(
+  animalID = names(detections),
+  detections = detections
+)
+
+det.table
+
+occasions.detected <- apply(
+  ch[[1]],
+  1,
+  function(x) sum(apply(x, 1, sum) > 0)
+)
+
+data.frame(
+  animalID = rownames(ch[[1]]),
+  totalDetections = apply(ch[[1]], 1, sum),
+  occasionsDetected = occasions.detected
+)
+
+trap.visits <- apply(
+  ch[[1]],
+  1,
+  function(x) sum(colSums(x) > 0)
+)
+
+summary.table.sess1 <- data.frame(
+  animalID = rownames(ch[[1]]),
+  totalDetections = apply(ch[[1]], 1, sum),
+  occasionsDetected = occasions.detected,
+  trapsVisited = trap.visits
+)
+
+summary.table.sess1 <- summary.table.sess1[order(summary.table.sess1$totalDetections,
+                             decreasing = TRUE), ]
+
+summary.table.sess1
+
+write.csv(summary.table.sess1, "session1_detections.csv")
+
+# detections session 2
+detections <- apply(ch[[2]], 1, sum)
+
+det.table <- data.frame(
+  animalID = names(detections),
+  detections = detections
+)
+
+det.table
+
+occasions.detected <- apply(
+  ch[[2]],
+  1,
+  function(x) sum(apply(x, 1, sum) > 0)
+)
+
+data.frame(
+  animalID = rownames(ch[[2]]),
+  totalDetections = apply(ch[[2]], 1, sum),
+  occasionsDetected = occasions.detected
+)
+
+trap.visits <- apply(
+  ch[[2]],
+  1,
+  function(x) sum(colSums(x) > 0)
+)
+
+summary.table.sess2 <- data.frame(
+  animalID = rownames(ch[[2]]),
+  totalDetections = apply(ch[[2]], 1, sum),
+  occasionsDetected = occasions.detected,
+  trapsVisited = trap.visits
+)
+
+summary.table.sess2 <- summary.table.sess2[order(summary.table.sess2$totalDetections,
+                                                 decreasing = TRUE), ]
+
+summary.table.sess2
+
+write.csv(summary.table.sess2, "session2_detections.csv")
+
 
 # Build Usage/Effort Matrices ##################################################
 

@@ -1100,7 +1100,7 @@ AIC(m0, mDhabitat, mDsession) #worse than the null model
 saveRDS(mDsession, file = "mDsession.rds")
 mDsession <- readRDS("mDsession.rds")
 
-# distance to shore model ...............
+# distance to shore model ......................................................
 #first scale the covariate
 for(i in 1:2) {
   
@@ -1150,10 +1150,47 @@ plot(island_poly)
 plot(hold, add = TRUE)  
 plot(traps(ch[[2]]),  add = TRUE, col = "red", pch = 16)
 
-
 esaPlot(mDshore) # good
 plot(mDshore)
 
+# estimating abundance & avg density in MLA ~~~~~~~~~~~~~~~~~~~~~~
+MLA_boundary <- st_read("C:\\Users\\celin\\OneDrive\\Desktop\\Tinian_GIS_layers\\MLA_boundary\\MLA_Boundary_2025.shp")
+
+crs(MLA_boundary)
+
+#reproject to UTM 55N
+MLA_boundary <- st_transform(MLA_boundary, 32655)
+#MLA_boundary <- as(MLA_boundary, "Spatial")
+
+plot(island_poly)
+plot(MLA_boundary, add = TRUE, border = "red", lwd = 2)
+
+#extract mask coordinates.....
+mask_xy <- st_as_sf(
+  as.data.frame(masklist[[1]]),
+  coords = c("x", "y"),
+  crs = st_crs(MLA_boundary)
+)
+
+inside <- lengths(st_within(mask_xy, MLA_boundary)) > 0
+
+mask_MLA <- masklist[[1]][inside, ]
+
+covariates(mask_MLA) <- covariates(masklist[[1]])[inside, ]
+
+summary(mask_MLA)
+head(covariates(mask_MLA))
+
+region.N(
+  mDshore,
+  region = mask_MLA,
+  spacing = 100)
+
+#calculate abundance in MLA
+N_MLA <- region.N(
+  mDshore,
+  region = MLA_boundary,
+  spacing = 250)
 
 #trial of activity centers: session 1.... not session specific -> will need to improve
 xy <- as.data.frame(masklist[[1]])
@@ -1173,11 +1210,7 @@ points(ac[,1], ac[,2], pch = 16, col = "blue")
 plot(traps(ch[[1]]),  add = TRUE, col = "red", pch = 16)
 
 
-#abundance
-N_hat <- predict(mDshore, type = "count")
-N_hat
-
-# distance to nearest road model ...............
+# distance to nearest road model ..............................................
 #first scale the covariate
 for(i in 1:2) {
   

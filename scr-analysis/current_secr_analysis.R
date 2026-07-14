@@ -314,6 +314,7 @@ legend("topright", legend=c("Session 1","Session 2"), pch=1:2, lty=1:2)
 # Set Mask and Analysis ########################################################
 
 # 1. read shapefile................
+# you will have to download and direct R to your GIS layers (they are too big to store in the repo)
 tinian <- st_read(
   "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp"
 )
@@ -659,6 +660,7 @@ masklist <- lapply(
     m
   }
 )
+
 # ..............................................................................
 
 
@@ -749,7 +751,7 @@ cor(
 cor(
   covariates(masklist[[2]])$d.to.shore,
   covariates(masklist[[2]])$elev
-) #not good r = 0.67
+) #not good r = 0.67 ---> exclude d.to.shore + elev model from analysis
 
 # plot each session mask
 plot(island_poly)
@@ -1932,7 +1934,7 @@ make_usage_matrix <- function(session_num, traps_df, deploy_df, n_occasions = 6)
   usage_mat
 }
 
-# Inspect ch ###################################################################
+# Inspect ch of cats ###################################################################
 summary(ch)
 plot(ch, tracks = TRUE)
 

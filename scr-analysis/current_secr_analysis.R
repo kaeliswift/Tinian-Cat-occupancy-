@@ -10,7 +10,7 @@ library(ggplot2)
 library(readr)
 library(terra)
 
-# Format Data for secr #########################################################
+# 1. Format Data for secr #########################################################
 #Load TrapTagger Data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 raw.data <- read.csv("TrapTagger_Cat_Individuals.csv")
 
@@ -171,7 +171,7 @@ plot(ch, tracks = TRUE)
 usage(traps(ch[[1]]))[1:42, ] #currently no usage -> ran into errors due to full usage in session 2& partial usage in session 1
 usage(traps(ch[[2]]))[1:8, ]                      # session 1 is still mainly covered so will ignore usage for now 
 
-# Rough estimate of buffer size ################################################
+# 2. Rough estimate of buffer size ################################################
 #estimate of sigma HN to suggest buffer size
 #buffer size is usually 4 sigma HN
 RPSV(ch, CC = TRUE)
@@ -199,7 +199,7 @@ suggest.buffer(cats.HN7000) #both ~11000 m -> weird
 suggest.buffer(cats.mask) #8000 and 9000 m -> not as bad
 
 
-#Checking D estimates & changes in buffer size #################################
+# 3. Checking D estimates & changes in buffer size #################################
 #OK... next moves before models......
 #graph buffer sizes & D estimates
 #decide on final buffer
@@ -311,7 +311,7 @@ legend("topright", legend=c("Session 1","Session 2"), pch=1:2, lty=1:2)
 #Choosing Buffer = 7000 for now!!!!!!!!
 
 
-# Set Mask and Analysis ########################################################
+# 4. Set Mask and Analysis ########################################################
 
 # 1. read shapefile................
 # you will have to download and direct R to your GIS layers (they are too big to store in the repo)
@@ -493,9 +493,7 @@ masklist <- lapply(
   1:2,
   function(i){
     
-    # -------------------------
-    # BUILD TRAPBUFFER MASK
-    # -------------------------
+    # BUILD TRAPBUFFER MASK..........
     
     m <- make.mask(
       traps(ch[[i]]),
@@ -507,11 +505,9 @@ masklist <- lapply(
     
     # define coordinates
     xy <- cbind(m$x, m$y)
-    
-    # -------------------------
-    # HABITAT
-    # -------------------------
-    
+
+    # HABITAT.............
+
     ex <- terra::extract(
       habitat_raster,
       xy
@@ -525,9 +521,7 @@ masklist <- lapply(
         ref = "tangantangan" #level with the most points needs to be reference level
       )
     
-    # -------------------------
-    # DISTANCE TO SHORE & ROADS
-    # -------------------------
+    # DISTANCE TO SHORE & ROADS.........
     
     # convert mask points to sf
     pts <- st_as_sf(
@@ -552,9 +546,8 @@ masklist <- lapply(
     
     covariates(m)$d.to.road <- as.numeric(apply(droads, 1, min)) #select only nearest road
     
-    # -------------------------
+    
     # MLA ACTIVITY ZONES -- no buffer around area rn.... may need to change
-    # -------------------------
     #inside or outside high activity MLA areas
     inside_MLA <- st_intersects(
       pts,
@@ -580,9 +573,7 @@ masklist <- lapply(
     
     covariates(m)$d.to.MLA <- as.numeric(apply(dMLA, 1, min)) #select only nearest 
     
-    # -------------------------
-    # ELEVATION
-    # -------------------------
+    # ELEVATION.......
     
     elev_vals <- terra::extract(
       elev,
@@ -591,16 +582,14 @@ masklist <- lapply(
     
     covariates(m)$elev <- elev_vals$tinian_dem
     
-    # -------------------------
-    # SLOPE
-    # -------------------------
+    # SLOPE..............
     slope_vals <- terra::extract(slope, xy)
     
     covariates(m)$slope <- slope_vals[,1]
     
-    # -------------------------
-    # DISTANCE TO HUMAN ACTIVITY AREAS
-    # -------------------------
+
+    # DISTANCE TO HUMAN ACTIVITY AREAS.........
+
     dhumans <- st_distance(
       pts,
       humans
@@ -1005,9 +994,9 @@ tr2$inside_extent <-
 table(tr2$inside_extent) # good
 
 
-# 9. try modelling..............
+# 5. Try modelling ###################################################
 # Trying null models............................................................
-# null model
+# null models #################################################
 m0 <- secr.fit(
   ch,
   mask = masklist,
@@ -1057,7 +1046,7 @@ AIC(m0, m0HR, m0EX) #HR is best preforming detection rate but using HN for now b
 
 # continuing on with half normal detection rate for now 
 
-# Trying D covariates...........................................................
+# D covariates ###################################################
 # habitat model...................
 table(covariates(masklist[[1]])$habitat)
 table(covariates(masklist[[2]])$habitat) #largest value needs to be reference level -> tangantangan
@@ -1163,7 +1152,7 @@ plot(traps(ch[[2]]),  add = TRUE, col = "red", pch = 16)
 esaPlot(mDshore) # good
 plot(mDshore)
 
-# estimating abundance & avg density in MLA ~~~~~~~~~~~~~~~~~~~~~~
+# Estimating abundance & avg density in MLA ########################
 MLA_boundary <- st_read("C:\\Users\\celin\\OneDrive\\Desktop\\Tinian_GIS_layers\\MLA_boundary\\MLA_Boundary_2025.shp")
 
 crs(MLA_boundary)
@@ -1887,7 +1876,7 @@ AIC(m0, mg0habitat) #lower AIC but somehow still not comparable
 saveRDS(mg0habitat, file = "mg0habitat.rds")
 mg0habitat <- readRDS("mg0habitat.rds")
 
-# Create effort matrix function ################################################
+# 6. Create effort matrix function ################################################
 make_usage_matrix <- function(session_num, traps_df, deploy_df, n_occasions = 6) {
   
   trap_ids <- traps_df$TrapID
@@ -1934,7 +1923,7 @@ make_usage_matrix <- function(session_num, traps_df, deploy_df, n_occasions = 6)
   usage_mat
 }
 
-# Inspect ch of cats ###################################################################
+# 7. Inspect ch of cats ###################################################################
 summary(ch)
 plot(ch, tracks = TRUE)
 
@@ -2109,13 +2098,13 @@ summary.table.sess2
 write.csv(summary.table.sess2, "session2_detections.csv")
 
 
-# Build Usage/Effort Matrices ##################################################
+# 8. Build Usage/Effort Matrices ##################################################
 
 usage_year1 <- make_usage_matrix(1, traps_year1, start_end)
 usage_year2 <- make_usage_matrix(2, traps_year2, start_end)
 
 
-# Attach Usage/Effort ##########################################################
+# Attach Usage/Effort .................................................
 
 usage(traps(ch[[1]])) <- usage_year1
 usage(traps(ch[[2]])) <- usage_year2

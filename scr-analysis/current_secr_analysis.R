@@ -457,7 +457,7 @@ Town <- humans %>%
   filter(Name == "Town") %>% 
   st_geometry()
 plot(st_geometry(Town), add = TRUE, col = "purple")
-
+ 
 legend(
   "topleft",
   legend = c(
@@ -478,8 +478,7 @@ legend(
     "violet",
     "purple"
   ),
-  bty = "n"
-)
+  bty = "n")
 
 humans <- st_geometry(humans)
 
@@ -741,7 +740,16 @@ cor(
   covariates(masklist[[2]])$d.to.MLA
 ) #good
 
+# distance to shore & elevation
+cor(
+  covariates(masklist[[1]])$d.to.shore,
+  covariates(masklist[[1]])$elev
+) #ok r = 0.4
 
+cor(
+  covariates(masklist[[2]])$d.to.shore,
+  covariates(masklist[[2]])$elev
+) #not good r = 0.67
 
 # plot each session mask
 plot(island_poly)

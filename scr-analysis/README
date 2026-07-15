@@ -5,15 +5,17 @@ Spatial-Capture-Recapture Analysis for Feral Cats on Tinian using secr package i
  The csvs you need for the project are within this folder.
 
  The pdfs within Resources are useful documents I used to learn about the secr package.
- 
-If y'all would also like to try the oSCR package, 
-I was working upon being able to incorporate our data into the existing code TrapTagger provides 
-(for some reason there is no straightforward way; their code is just a function). 
-I put a pause on that to push forward and get a secr model running, but that code is in traptagger_oSCR.R. 
 
 The  R scripts that start with old_, you can skip. 
 They are failed attempts of mine (I am just holding on to them right now if the script becomes useful). 
 
-The most recent R script is current_secr_analysis.R. It has the current code for the cats secr analysis.
+To run the code use pt1_secr_formatting.R, pt2_secr_mask.R, and then pt3_secr_models.R
+
+The most recent end to end R script is current_secr_analysis.R. It has the current code for the cats secr analysis.
 
 Email me at cb1199@uw.edu with any questions.
+
+If y'all would also like to try the oSCR package, 
+I was working upon being able to incorporate our data into the existing code TrapTagger provides 
+(for some reason there is no straightforward way; their code is just a function). 
+I put a pause on that to push forward and get a secr model running, but that code is in traptagger_oSCR.R. 

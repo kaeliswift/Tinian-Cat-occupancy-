@@ -901,10 +901,112 @@ head(covariates(mask_MLA))
 region.N(
   mDshore,
   region = mask_MLA,
-  spacing = 100)
+  spacing = 250)
 
 # calculate abundance in study area
 region.N(
   mDshore,
-  spacing = 100)
+  spacing = 250)
+
+# Trial of different functions #################
+closedN(ch)
+
+suggest.buffer(mDshore) #~9000 m for both sessions
+
+# trying to see if things change with session effects
+mDshore.sess <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+  D ~ d.to.shore + session,
+  g0 ~ 1,
+  sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(mDshore.sess)
+saveRDS(mDshore.sess, "mDshore_sess.rds")
+AIC(m0, mDshore, mDshore.sess)
+
+mDshore.sess <- readRDS("mDshore_sess.rds")
+
+#calculate abundance in MLA
+region.N(
+  mDshore.sess,
+  region = mask_MLA,
+  spacing = 250)
+
+# calculate abundance in study area
+region.N(
+  mDshore.sess,
+  spacing = 250)
+
+
+# h2 mixture models ############
+#g0............
+mg0h2 <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ 1,
+    g0 ~ h2,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(mg0h2)
+saveRDS(mg0h2, "mg0h2.rds")
+AIC(m0, mg0h2)
+
+region.N(
+  mg0h2,
+  spacing = 250)
+
+mg0h2 <- readRDS("mg0h2.rds")
+
+# sigma ~ h2 ........
+
+msigmah2 <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ 1,
+    g0 ~ 1,
+    sigma ~ h2
+  ),
+  detectfn = "halfnormal"
+)
+
+
+summary(msigmah2)
+saveRDS(msigmah2, "msigmah2.rds")
+AIC(m0, mg0h2, msigmah2)
+
+msigmah2 <- readRDS("msigmah2.rds")
+
+region.N(
+  msigmah2,
+  spacing = 250)
+
+#sigma ~ h2, D ~ d.to.shore
+mDshoresigmah2 <- secr.fit(
+  ch,
+  mask = masklist,
+  model = list(
+    D ~ d.to.shore,
+    g0 ~ 1,
+    sigma ~ h2
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(mDshoresigmah2)
+saveRDS(mDshoresigmah2, "mDshoresigmah2.rds")
+region.N(
+  mDshoresigmah2,
+  spacing = 250)
+
+AIC(m0, mg0h2, msigmah2, mDshoresigmah2)
 

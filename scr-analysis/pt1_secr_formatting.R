@@ -97,6 +97,7 @@ data <- data %>%
 data <- data %>%
   mutate(TrapID = Site.Name)
 
+
 # 7. Format Trap Data ########################################################
 traps.data <- read.csv("cat_cam_deployment_landcover_type.csv") %>%
   rename(TrapID = Label, x = Longitude, y = Latitude) %>%
@@ -118,50 +119,158 @@ trapIDs_year2 <- start_end %>% filter(Session == 2) %>% pull(Site.Name)
 traps_year1 <- traps.data %>% filter(TrapID %in% trapIDs_year1) %>% select(TrapID, x, y)
 traps_year2 <- traps.data %>% filter(TrapID %in% trapIDs_year2) %>% select(TrapID, x, y)
 
+#traps combined (no session)
+traps_combined <- traps.data %>% select(TrapID, x, y)
 
+# INSPECT # of cats in both sessions ########################################
+cats_both <- data %>%
+  distinct(Individuals, Session) %>%   # one row per cat per session
+  count(Individuals) %>%               # number of sessions each cat appears in
+  filter(n > 1)
+
+cats_both
+
+cats_both_ids <- cats_both$Individuals
+
+# Join trap coordinates onto every detection
+detections <- data %>%
+  left_join(traps.data, by = c("TrapID"))
+
+# calculate the shift in activity "center" in m
+centers <- detections %>%
+  filter(Individuals %in% cats_both_ids) %>%
+  group_by(Individuals, Session) %>%
+  summarize(
+    meanX = mean(as.numeric(x)),
+    meanY = mean(as.numeric(y)),
+    nDetections = n(),
+    .groups = "drop"
+  )
+
+centers_mean <- centers %>%
+  select(-nDetections) %>%   # remove session-specific count
+  pivot_wider(
+    names_from = Session,
+    values_from = c(meanX, meanY)
+  ) %>%
+  mutate(
+    shift_m = sqrt((meanX_2 - meanX_1)^2 +
+                     (meanY_2 - meanY_1)^2)
+  )
+
+centers_mean
+
+# find closest distance btw cameras btw sessions
+cat_both_cameras <- detections %>%
+  filter(Individuals %in% cats_both_ids) %>%
+  distinct(Individuals, Session, TrapID, x, y)
+
+min_dist_pair <- cat_both_cameras %>%
+  group_by(Individuals) %>%
+  group_modify(~{
+    
+    s1 <- distinct(filter(.x, Session == 1), TrapID, x, y)
+    s2 <- distinct(filter(.x, Session == 2), TrapID, x, y)
+    
+    if (nrow(s1) == 0 || nrow(s2) == 0) {
+      return(tibble(
+        min_distance_m = NA_real_,
+        trap_s1 = NA_character_,
+        trap_s2 = NA_character_
+      ))
+    }
+    
+    # calculate only cross-session distances
+    cross <- outer(
+      1:nrow(s1),
+      1:nrow(s2),
+      Vectorize(function(i, j) {
+        sqrt((s1$x[i] - s2$x[j])^2 +
+               (s1$y[i] - s2$y[j])^2)
+      })
+    )
+    
+    min_index <- which(cross == min(cross), arr.ind = TRUE)
+    
+    tibble(
+      min_distance_m = min(cross),
+      trap_s1 = s1$TrapID[min_index[1, 1]],
+      trap_s2 = s2$TrapID[min_index[1, 2]]
+    )
+    
+  }) %>%
+  ungroup()
+
+min_dist_pair
+
+# checking max distance btw cameras btw sessions
+home_range_span <- cat_both_cameras %>%
+  group_by(Individuals, Session) %>%
+  group_modify(~{
+    coords <- distinct(.x, TrapID, x, y)
+    
+    if(nrow(coords) < 2){
+      return(tibble(max_camera_distance_m = 0))
+    }
+    
+    tibble(
+      max_camera_distance_m = max(as.matrix(dist(coords[,c("x","y")])))
+    )
+  })
+
+home_range_span
+
+# how many cameras the cats showed up on
+camera_summary <- cat_both_cameras %>%
+  group_by(Individuals, Session) %>%
+  summarize(
+    n_cameras = n_distinct(TrapID),
+    cameras = paste(sort(unique(TrapID)), collapse = ", "),
+    .groups = "drop"
+  )
+
+camera_summary
 
 # 8. Create txt Files for secr ################################################
-capt <- data %>% select(Session, Animal, Occasion, TrapID)
+# DROPPING SESSION TO COMBINE ########################################
+capt <- data %>% select(Animal, Occasion, TrapID,
+                        #Session
+                        )
+
+capt_count <- data %>%
+  group_by(Individuals, Occasion, TrapID) %>%
+  summarise(
+    count = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Session = 3   # or whatever session numbers you use
+  ) %>%
+  select(Session, Individuals, Occasion, TrapID, count)
+
+head(capt_count)
 
 # all capture history data
-write.table(capt, "capt_all.txt",
+write.table(capt_count, "capt_count.txt",
             row.names = FALSE, col.names = FALSE,
             quote = FALSE, sep = "\t")
 
-# trap info session 1
-write.table(traps_year1, "traps_year1.txt",
+# trap info 
+write.table(traps_combined, "traps_combined.txt",
             row.names = FALSE, col.names = FALSE,
             quote = FALSE, sep = "\t")
 
-# trap info session 2
-write.table(traps_year2, "traps_year2.txt",
-            row.names = FALSE, col.names = FALSE,
-            quote = FALSE, sep = "\t")
+
 
 # 9. Create Capture History ####################################################
 ch <- read.capthist(
-  captfile = "capt_all.txt",
-  trapfile = list("traps_year1.txt", "traps_year2.txt"),
+  captfile = "capt_count.txt",
+  trapfile = "traps_combined.txt",
   detector = "count",
   fmt = "trapID"
 ) # should say: no errors found :-)
 
-# Add Traps covariates ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-traps1 <- traps(ch[[1]])
-traps2 <- traps(ch[[2]])
 
-traps_year1 <- traps.data %>% filter(TrapID %in% trapIDs_year1) %>% select(TrapID, x, y, CLASS.landcover)
-traps_year2 <- traps.data %>% filter(TrapID %in% trapIDs_year2) %>% select(TrapID, x, y, CLASS.landcover)
-
-# Add CLASS.landcover covariate to Traps (site-specific covariate) .............
-covariates(traps1) <- data.frame(site_habitat = traps_year1$CLASS.landcover)
-covariates(traps2) <- data.frame(site_habitat = traps_year2$CLASS.landcover)
-
-traps(ch[[1]]) <- traps1
-traps(ch[[2]]) <- traps2
-
-table(covariates(traps(ch[[1]]))) #worked
-table(covariates(traps(ch[[2]])))
 
 
 # Inspect new ch ###################################################################

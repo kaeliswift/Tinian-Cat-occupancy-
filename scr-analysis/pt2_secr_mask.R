@@ -11,12 +11,14 @@ library(ggplot2)
 library(readr)
 library(terra)
 
+# 1. Read in ch #################################################################
+ch <- readRDS("ch.RDS")
+summary(ch) #good
 
-# 10. Read habitat shapefile  #####################################
+# 2. Read habitat shapefile  #####################################
 # you will have to download and direct R to your GIS layers (they are too big to store in the repo)
 tinian <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp"
-)
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp")
 
 # make sure CRS matches traps
 st_crs(tinian)
@@ -27,14 +29,10 @@ island_boundary <- st_union(tinian)
 plot((island_boundary)) #shows island boundary
 
 # create spatial polygon.... more clear for secr
-island_sp <- as(
-  st_cast(island_boundary, "MULTIPOLYGON"),
-  "Spatial"
-)
+# convert island_boundary to SpatVect
+island_poly <- vect(island_boundary)
 
-plot(island_sp)
-
-# 11. Reclassify habitat ##########################################
+# 3. Reclassify habitat ##########################################
 tinian <- tinian %>%
   mutate(
     habitat = case_when(
@@ -48,8 +46,9 @@ tinian <- tinian %>%
   )
 
 table(tinian$habitat, useNA = "ifany")
+# will have to fill the NAs 
 
-# 12. Rasterize habitat ###########################################
+# 4. Rasterize habitat ###########################################
 tinian_v <- vect(tinian)
 
 # convert habitat to factor
@@ -69,56 +68,64 @@ habitat_raster <- rasterize(
 
 plot(habitat_raster) #nice
 
-# 13. Read in more covariates #################################
+# 5. Read in more covariates ###################################################
 
-# define shoreline
+# define shoreline..........................
 shoreline <- st_boundary(island_boundary)
 plot(shoreline)
 
-# define roads 
+# define roads............................. 
 roads <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/Tinian_roads/Roads Tinian.shp"
-)
-plot(roads["GlobalID"])
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/Tinian_roads/Roads Tinian.shp")
 
 roads <- st_geometry(roads)
 plot(roads)
 
-# make sure roads has epsg (missing w/o below command)
-st_crs(roads) <- st_crs(tinian) 
+st_crs(roads) == st_crs(tinian) #bad
+roads <- st_transform(roads, st_crs(tinian))
+st_crs(roads) == st_crs(tinian) #good
 
-# define MLA activity areas
+# define MLA activity areas.................
 MLA_activity <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/MLA_activity_areas/MLA_activity areas.shp"
-)
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/MLA_activity_areas/MLA_activity areas.shp")
 
-plot(st_geometry(island_boundary))
+st_crs(MLA_activity) == st_crs(tinian) # looks ok
+
+plot(island_poly)
 plot(st_geometry(MLA_activity), add = TRUE, col = "red")
 
 MLA_activity <- st_geometry(MLA_activity)
 
-# extract elevation
+# extract elevation.........................
 elev <- rast("C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/tinian_dem")
-crs(elev)
+
+st_crs(elev) == st_crs(tinian) # bad
+
+st_crs(elev) #makes sure to add EPSG
 crs(elev) <- "EPSG:32655"
+
+st_crs(elev) == st_crs(tinian) # looks ok
 
 plot(elev)
 
-# extract slope from elevation
+# extract slope from elevation.....................
 slope <- terrain(
   elev,
   v = "slope",
   unit = "degrees",
   neighbors = 8
-)
+) #THIS WILL BE SLOW
 
 
-# extract human areas separately & together
+# extract human areas separately & together..............................
 humans <- st_read(
   "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/Human_activity/humans.shp")
 
+st_crs(humans) == st_crs(tinian) # bad
+humans <- st_geometry(humans)
+
 # plot humans covariate
-plot(st_geometry(island_boundary))
+plot(island_poly)
 plot(st_geometry(humans), add = TRUE, col = "pink")
 
 table(humans$Name) #available human locations
@@ -182,514 +189,368 @@ legend(
   ),
   bty = "n")
 
-humans <- st_geometry(humans)
 
-# 14. Create masks per session w/ covariates  ##################################
+# 6. Create mask w/ covariates  ################################################
 
-# convert island_boundary to SpatVect
-island_poly <- vect(island_boundary)
-
-# create session masks..................................................................
-masklist <- lapply(
-  1:2,
-  function(i){
-    
-    # BUILD TRAPBUFFER MASK..........
-    
-    m <- make.mask(
-      traps(ch[[i]]),
-      type = "trapbuffer",
-      buffer = 7000,
-      spacing = 250, 
-      poly = island_poly
-    )
-    
-    # define coordinates
-    xy <- cbind(m$x, m$y)
-    
-    # HABITAT.............
-    
-    ex <- terra::extract(
-      habitat_raster,
-      xy
-    )
-    
-    covariates(m)$habitat <- factor(ex$habitat)
-    
-    covariates(m)$habitat <-
-      relevel(
-        covariates(m)$habitat,
-        ref = "tangantangan" #level with the most points needs to be reference level
-      )
-    
-    # DISTANCE TO SHORE & ROADS.........
-    
-    # convert mask points to sf
-    pts <- st_as_sf(
-      data.frame(x = m$x, y = m$y),
-      coords = c("x", "y"),
-      crs = st_crs(tinian)
-    )
-    
-    # distance to shoreline
-    dshore <- st_distance(
-      pts,
-      shoreline
-    )
-    
-    covariates(m)$d.to.shore <- as.numeric(dshore)
-    
-    # distance to road
-    droads <- st_distance(
-      pts,
-      roads
-    )
-    
-    covariates(m)$d.to.road <- as.numeric(apply(droads, 1, min)) #select only nearest road
-    
-    
-    # MLA ACTIVITY ZONES -- no buffer around area rn.... may need to change
-    #inside or outside high activity MLA areas
-    inside_MLA <- st_intersects(
-      pts,
-      MLA_activity,
-      sparse = FALSE
-    )
-    
-    covariates(m)$MLA <- as.integer(
-      rowSums(inside_MLA) > 0
-    )
-    
-    covariates(m)$MLA <- factor(
-      ifelse(rowSums(inside_MLA) > 0,
-             "inside",
-             "outside")
-    )
-    
-    # distance from high activity MLA areas
-    dMLA <- st_distance(
-      pts,
-      MLA_activity
-    )
-    
-    covariates(m)$d.to.MLA <- as.numeric(apply(dMLA, 1, min)) #select only nearest 
-    
-    # ELEVATION.......
-    
-    elev_vals <- terra::extract(
-      elev,
-      xy
-    )
-    
-    covariates(m)$elev <- elev_vals$tinian_dem
-    
-    # SLOPE..............
-    slope_vals <- terra::extract(slope, xy)
-    
-    covariates(m)$slope <- slope_vals[,1]
-    
-    
-    # DISTANCE TO HUMAN ACTIVITY AREAS.........
-    
-    dhumans <- st_distance(
-      pts,
-      humans
-    )
-    
-    covariates(m)$d.to.humans <- as.numeric(apply(dhumans, 1, min))
-    
-    dAirport <- st_distance(
-      pts,
-      Airport
-    )
-    
-    covariates(m)$d.to.Airport <- as.numeric(apply(dAirport, 1, min))
-    
-    dCampTinian <- st_distance(
-      pts,
-      CampTinian
-    )
-    
-    covariates(m)$d.to.CampTinian <- as.numeric(apply(dCampTinian, 1, min))
-    
-    dDump <- st_distance(
-      pts,
-      Dump
-    )
-    
-    covariates(m)$d.to.Dump <- as.numeric(apply(dDump, 1, min))
-    
-    dNorthField <- st_distance(
-      pts,
-      NorthField
-    )
-    
-    covariates(m)$d.to.NorthField <- as.numeric(apply(dNorthField, 1, min))
-    
-    dQuarry <- st_distance(
-      pts,
-      Quarry
-    )
-    
-    covariates(m)$d.to.Quarry <- as.numeric(apply(dQuarry, 1, min))
-    
-    dTown <- st_distance(
-      pts,
-      Town
-    )
-    
-    covariates(m)$d.to.Town <- as.numeric(apply(dTown, 1, min))
-    
-    dVOA <- st_distance(
-      pts,
-      VOA
-    )
-    
-    covariates(m)$d.to.VOA <- as.numeric(apply(dVOA, 1, min))
-    
-    m
-  }
+mask <- make.mask(
+  traps(ch),
+  type = "trapbuffer",
+  buffer = 8000,   # choose your final buffer
+  spacing = 250,
+  poly = island_poly
 )
 
 
-# 15. Inspect mask points ######################################################
-nrow(masklist[[1]]) #1580
-nrow(masklist[[2]]) #945
-
-# check covariates
-summary(covariates(masklist[[1]]))
-summary(covariates(masklist[[2]]))
+# define coordinates
+xy <- cbind(mask$x, mask$y)
 
 
-# check habitat 
-summary(covariates(masklist[[1]])$habitat)
-summary(covariates(masklist[[2]])$habitat) 
+# HABITAT 
 
-#will need to reassign NAs
+ex <- terra::extract(
+  habitat_raster,
+  xy
+)
 
-# check d.to.shore
-summary(covariates(masklist[[1]])$d.to.shore)
-summary(covariates(masklist[[2]])$d.to.shore)
+covariates(mask)$habitat <- factor(ex$habitat)
 
-# check d.to.road
-summary(covariates(masklist[[1]])$d.to.road)
-summary(covariates(masklist[[2]])$d.to.road)
+covariates(mask)$habitat <-
+  relevel(
+    covariates(mask)$habitat,
+    ref = "tangantangan"
+  )
 
-# check MLA activity zones
-summary(covariates(masklist[[1]])$MLA)
-summary(covariates(masklist[[2]])$MLA)
 
-# check distance to MLA activity zones
-summary(covariates(masklist[[1]])$d.to.MLA)
-summary(covariates(masklist[[2]])$d.to.MLA)
+# DISTANCE TO SHORE 
 
-# summary of each session mask
-summary(masklist[[1]])
-summary(masklist[[2]])
+pts <- st_as_sf(
+  data.frame(x = mask$x, y = mask$y),
+  coords = c("x", "y"),
+  crs = st_crs(tinian)
+)
 
-# check structure of masks
-verify(masklist[[1]]) #good
-verify(masklist[[2]]) #good
-verify(masklist) #issue -> will need to correct
 
-# check all covariates there
-names(covariates(masklist[[1]]))
-names(covariates(masklist[[2]]))
+dshore <- st_distance(
+  pts,
+  shoreline
+)
 
-# 16. Check covariate correlations  ############################################
+covariates(mask)$d.to.shore <- as.numeric(dshore)
+
+
+# DISTANCE TO ROAD 
+
+droads <- st_distance(
+  pts,
+  roads
+)
+
+covariates(mask)$d.to.road <-
+  as.numeric(apply(droads, 1, min))
+
+
+# MLA 
+
+inside_MLA <- st_intersects(
+  pts,
+  MLA_activity,
+  sparse = FALSE
+)
+
+covariates(mask)$MLA <- factor(
+  ifelse(
+    rowSums(inside_MLA) > 0,
+    "inside",
+    "outside"
+  )
+)
+
+
+# distance to MLA
+
+dMLA <- st_distance(
+  pts,
+  MLA_activity
+)
+
+covariates(mask)$d.to.MLA <-
+  as.numeric(apply(dMLA, 1, min))
+
+
+# ELEVATION 
+
+elev_vals <- terra::extract(
+  elev,
+  xy
+)
+
+covariates(mask)$elev <-
+  elev_vals$tinian_dem
+
+
+
+# SLOPE 
+
+slope_vals <- terra::extract(
+  slope,
+  xy
+)
+
+covariates(mask)$slope <-
+  slope_vals$slope
+
+
+
+# DISTANCE TO HUMAN AREAS 
+
+dhumans <- st_distance(
+  pts,
+  humans
+)
+
+covariates(mask)$d.to.humans <-
+  as.numeric(apply(dhumans, 1, min))
+
+
+# Individual human areas
+
+covariates(mask)$d.to.Airport <-
+  as.numeric(apply(st_distance(pts, Airport),1,min))
+
+covariates(mask)$d.to.CampTinian <-
+  as.numeric(apply(st_distance(pts, CampTinian),1,min))
+
+covariates(mask)$d.to.Dump <-
+  as.numeric(apply(st_distance(pts, Dump),1,min))
+
+covariates(mask)$d.to.NorthField <-
+  as.numeric(apply(st_distance(pts, NorthField),1,min))
+
+covariates(mask)$d.to.Quarry <-
+  as.numeric(apply(st_distance(pts, Quarry),1,min))
+
+covariates(mask)$d.to.Town <-
+  as.numeric(apply(st_distance(pts, Town),1,min))
+
+covariates(mask)$d.to.VOA <-
+  as.numeric(apply(st_distance(pts, VOA),1,min))
+
+
+# 7. Inspect mask points ######################################################
+verify(mask)
+summary(mask) #NAs in habitat & elev & slope ---- will need to fix
+
+nrow(mask) #1610 mask points
+
+plot(mask)
+
+summary(covariates(mask))
+
+# 8. Replace any NAs with nearest neighbor #####################################
+# habitat
+h <- covariates(mask)$habitat
+
+h[is.na(h)] <-
+  names(sort(table(h), decreasing=TRUE))[1]
+
+covariates(mask)$habitat <- droplevels(h)
+
+
+# elevation
+covariates(mask)$elev[
+  is.na(covariates(mask)$elev)
+] <- median(
+  covariates(mask)$elev,
+  na.rm=TRUE
+)
+
+
+# slope
+covariates(mask)$slope[
+  is.na(covariates(mask)$slope)
+] <- median(
+  covariates(mask)$slope,
+  na.rm=TRUE
+)
+
+# 9. Check covariate correlations  ############################################
 # check numeric covariate correlation (r > 0.5 not good)
-# distance to shore & road correlation check
+
+#d.to.shore
 cor(
-  covariates(masklist[[1]])$d.to.shore,
-  covariates(masklist[[1]])$d.to.road
+  covariates(mask)$d.to.shore,
+  covariates(mask)$d.to.road
 ) #good
 
 cor(
-  covariates(masklist[[2]])$d.to.shore,
-  covariates(masklist[[2]])$d.to.road
-) #good
-
-# distance to road & MLA activity area correlation check
-cor(
-  covariates(masklist[[1]])$d.to.road,
-  covariates(masklist[[1]])$d.to.MLA
+  covariates(mask)$d.to.shore,
+  covariates(mask)$d.to.MLA
 ) #good
 
 cor(
-  covariates(masklist[[2]])$d.to.road,
-  covariates(masklist[[2]])$d.to.MLA
-) #good
-
-# distance to shore & MLA activity area correlation check
-cor(
-  covariates(masklist[[1]])$d.to.shore,
-  covariates(masklist[[1]])$d.to.MLA
+  covariates(mask)$d.to.shore,
+  covariates(mask)$elev
 ) #good
 
 cor(
-  covariates(masklist[[2]])$d.to.shore,
-  covariates(masklist[[2]])$d.to.MLA
+  covariates(mask)$d.to.shore,
+  covariates(mask)$slope
 ) #good
 
-# distance to shore & elevation
 cor(
-  covariates(masklist[[1]])$d.to.shore,
-  covariates(masklist[[1]])$elev
-) #ok r = 0.4
+  covariates(mask)$d.to.shore,
+  covariates(mask)$d.to.humans
+) #good
+
+#d.to.road
+cor(
+  covariates(mask)$d.to.road,
+  covariates(mask)$d.to.MLA
+) #good
 
 cor(
-  covariates(masklist[[2]])$d.to.shore,
-  covariates(masklist[[2]])$elev
-) #not good r = 0.67 ---> exclude d.to.shore + elev model from analysis
+  covariates(mask)$d.to.road,
+  covariates(mask)$elev
+) #good
+
+cor(
+  covariates(mask)$d.to.road,
+  covariates(mask)$slope
+) #good
+
+cor(
+  covariates(mask)$d.to.road,
+  covariates(mask)$d.to.humans
+) #good
+
+#d.to.MLA
+cor(
+  covariates(mask)$d.to.MLA,
+  covariates(mask)$elev
+) #good
+
+cor(
+  covariates(mask)$d.to.MLA,
+  covariates(mask)$slope
+) #good
+
+#elev
+cor(
+  covariates(mask)$elev,
+  covariates(mask)$slope
+) #good
+
+cor(
+  covariates(mask)$elev,
+  covariates(mask)$d.to.humans
+) #good
+
+#slope
+cor(
+  covariates(mask)$slope,
+  covariates(mask)$d.to.humans
+) #good
 
 
-# 17. Plot each session mask  ################################################
-plot(island_poly)
-plot(masklist[[1]], pch = 15, cex = 0.3, add = TRUE)
+# 10. Standardized numeric covariates #########################################
+scale_covariates <- c(
+  "d.to.shore",
+  "d.to.road",
+  "elev",
+  "slope",
+  "d.to.MLA",
+  "d.to.humans",
+  "d.to.Airport",
+  "d.to.CampTinian",
+  "d.to.Dump",
+  "d.to.NorthField",
+  "d.to.Quarry",
+  "d.to.Town",
+  "d.to.VOA"
+)
 
-plot(island_poly)
-plot(masklist[[2]], pch = 15, cex = 0.3, add = TRUE)
-
-# double check mask structure
-class(masklist[[1]])
-class(masklist[[2]])
-
-attributes(masklist[[1]])
-attributes(masklist[[2]])
-
-# 18. Replace any NAs with nearest neighbor ##################################
-for(i in 1:2){
-  
-  m <- masklist[[i]]
-  
-  h <- as.character(covariates(m)$habitat)
-  
-  # convert blanks to NA
-  h[h == ""] <- NA
-  
-  # rebuild factor
-  h <- factor(h)
-  
-  # set reference level -> needs to be dominant category
-  h <- relevel(h, ref = "tangantangan")
-  
-  covariates(m)$habitat <- h
-  
-  masklist[[i]] <- m
+for (v in scale_covariates) {
+  covariates(mask)[[paste0(v, "_z")]] <-
+    as.numeric(scale(covariates(mask)[[v]]))
 }
 
-table(covariates(masklist[[1]])$habitat, useNA="ifany")
-table(covariates(masklist[[2]])$habitat, useNA="ifany")
+summary(covariates(mask))
+
+# check SD to make sure that it worked (SD of 0 is bad) 
+sapply(covariates(mask), function(x) {
+  if(is.numeric(x)) sd(x, na.rm=TRUE)
+})
 
 
-# 6. replace NAs in habitat & 1 in elev with nearest neighbor..........
-#session 1...
-m <- masklist[[1]]
+# numeric covariate correlation matrix
+num_cov <- covariates(mask)[sapply(covariates(mask), is.numeric)]
 
-h <- covariates(m)$habitat
+cor(num_cov, use="complete.obs")
 
-# replace NA with nearest category manually
-h[is.na(h)] <- names(sort(table(h), decreasing = TRUE))[1]
-
-covariates(m)$habitat <- droplevels(h)
-
-masklist[[1]] <- m
-
-#check it worked
-table(
-  covariates(masklist[[1]])$habitat,
-  useNA = "ifany"
-) #good
-
-#session 2....
-m <- masklist[[2]]
-
-h <- covariates(m)$habitat
-
-# replace NA with nearest category manually
-h[is.na(h)] <- names(sort(table(h), decreasing = TRUE))[1]
-
-covariates(m)$habitat <- droplevels(h)
-
-masklist[[2]] <- m
-
-#replace elev NAs with avg elev.....
-#session 1 (only 1 NA there)
-m <- masklist[[1]]
-
-xy <- cbind(m$x, m$y)
-
-elev_vals <- terra::extract(elev, xy)
-
-idx <- which(is.na(elev_vals$tinian_dem))
-
-elev_vals$tinian_dem[idx] <- median(elev_vals$tinian_dem, na.rm = TRUE)
-
-covariates(m)$elev <- elev_vals$tinian_dem
-
-masklist[[1]] <- m
-
-#check it worked
-summary(covariates(masklist[[1]])$elev)
-summary(covariates(masklist[[2]])$elev)
-
-#replace slope NAs with avg elev.....
-#session 1 
-m <- masklist[[1]]
-
-xy <- cbind(m$x, m$y)
-
-slope_vals <- terra::extract(slope, xy)
-
-idx <- which(is.na(slope_vals$slope))
-
-slope_vals$slope[idx] <- median(slope_vals$slope, na.rm = TRUE)
-
-covariates(m)$slope <- slope_vals$slope
-
-masklist[[1]] <- m
-
-#session 2
-m <- masklist[[2]]
-
-xy <- cbind(m$x, m$y)
-
-slope_vals <- terra::extract(slope, xy)
-
-idx <- which(is.na(slope_vals$slope))
-
-slope_vals$slope[idx] <- median(slope_vals$slope, na.rm = TRUE)
-
-covariates(m)$slope <- slope_vals$slope
-
-masklist[[2]] <- m
-
-#check it worked
-summary(covariates(masklist[[1]])$slope)
-summary(covariates(masklist[[2]])$slope)
-
-# 19. Force secr to recognize both session masks  ##############################
-class(masklist) <- c("mask", "list")
-verify(masklist)
-
-#session 1 mask
+# 11. Plot   mask  #####################################################
 plot(island_poly)
-plot(masklist[[1]], pch = 15, cex = 0.4, add = TRUE)
-plot(traps(ch[[1]]), add = TRUE, col = "red", pch = 16)
+plot(mask, pch = 15, cex = 0.3, add = TRUE)
+plot(traps(ch), add = TRUE, col = "red", pch = 16)
 
-#session 2 mask
-plot(island_poly)
-plot(masklist[[2]], pch = 15, cex = 0.4, add = TRUE)
-plot(traps(ch[[2]]), add = TRUE, col = "red", pch = 16)
 
-plot(masklist) #weird that session 1 is so different
+# double check mask structure
+class(mask)
+
+verify(mask)
+
 
 # 20. Graph mask covariates  ##################################################
 
 # habitat data
 plot(island_poly)
-plot(masklist[[1]], covariate = "habitat", pch = 15, cex = 0.6, add = TRUE)
-plot(traps(ch[[1]]), add = TRUE, pch = 16)
+plot(mask, covariate = "habitat", pch = 15, cex = 0.6, add = TRUE)
+plot(traps(ch), add = TRUE, pch = 16)
 
-plot(island_poly)
-plot(masklist[[2]], covariate = "habitat", pch = 15, cex = 0.6, add = TRUE)
-plot(traps(ch[[2]]), add = TRUE, pch = 16)
 
 # d to shore
 plot(island_poly)
-plot(masklist[[1]], covariate = "d.to.shore", pch = 15, cex = 0.6, add = TRUE)
-plot(traps(ch[[1]]), add = TRUE, pch = 16)
+plot(mask, covariate = "d.to.shore", pch = 15, cex = 0.6, add = TRUE)
+plot(traps(ch), add = TRUE, pch = 16)
 
-plot(island_poly)
-plot(masklist[[2]], covariate = "d.to.shore", pch = 15, cex = 0.6, add = TRUE)
-plot(traps(ch[[2]]), add = TRUE, pch = 16)
 
 # d to road
 plot(island_poly)
-plot(masklist[[1]], covariate = "d.to.road", pch = 15, cex = 0.6, add = TRUE)
-
-azplot(traps(ch[[1]]), add = TRUE, pch = 16)
-
-plot(island_poly)
-plot(masklist[[2]], covariate = "d.to.road", pch = 15, cex = 0.6, add = TRUE)
-plot(roads, add = TRUE)
-plot(traps(ch[[2]]), add = TRUE, pch = 16)
-
-# high MLA activity areas
-plot(island_poly)
-plot(masklist[[1]], covariate = "MLA", pch = 15, cex = 0.6, add = TRUE)
-plot(traps(ch[[1]]), add = TRUE, pch = 16)
-
-plot(island_poly)
-plot(masklist[[2]], covariate = "MLA", pch = 15, cex = 0.6, add = TRUE)
-plot(traps(ch[[2]]), add = TRUE, pch = 16)
-
-# distance to high MLA activity areas
-plot(island_poly)
-plot(masklist[[1]], covariate = "d.to.MLA", pch = 15, cex = 0.6, add = TRUE)
-plot(traps(ch[[1]]), add = TRUE, pch = 16)
-
-plot(island_poly)
-plot(masklist[[2]], covariate = "d.to.MLA", pch = 15, cex = 0.6, add = TRUE)
-plot(traps(ch[[2]]), add = TRUE, pch = 16)
+plot(mask, covariate = "d.to.road", pch = 15, cex = 0.6, add = TRUE)
+plot(traps(ch), add = TRUE, pch = 16)
 
 # elevation
 plot(island_poly)
-plot(masklist[[1]], covariate = "elev", pch = 15, cex = 0.6, add = TRUE)
-plot(traps(ch[[1]]), add = TRUE, pch = 16)
+plot(mask, covariate = "elev", pch = 15, cex = 0.6, add = TRUE)
+plot(traps(ch), add = TRUE, pch = 16)
 
+#slope
 plot(island_poly)
-plot(masklist[[2]], covariate = "elev", pch = 15, cex = 0.6, add = TRUE)
-plot(traps(ch[[2]]), add = TRUE, pch = 16)
+plot(mask, covariate = "slope", pch = 15, cex = 0.6, add = TRUE)
+plot(traps(ch), add = TRUE, pch = 16)
 
-# 21. Save mask as rds object  ###################################################
-saveRDS(masklist, file = "masklist.rds")
+# 12. Save mask as rds object  ###################################################
+saveRDS(mask, file = "mask.rds")
 masklist <- readRDS("masklist.rds")
 
-# 22. Check for mismatch of traps and mask  #####################################
-plot(masklist) #looks like session 2
-plot(traps(ch[[1]]), add = TRUE, col = "red", pch = 16)
-plot(traps(ch[[2]]), add = TRUE, col = "red", pch = 16)
+# 13. Check for mismatch of traps and mask #####################################
 
-st_crs(tinian) 
-st_crs(traps.sf) #good both are the same projection
+# plot mask and traps together
+plot(island_poly)
+plot(mask, add = TRUE, pch = 15, cex = 0.4)
+plot(traps(ch), add = TRUE, col = "red", pch = 16)
 
-#actual plots
-#session 1
-plot(island_sp)
-plot(masklist[[1]], add = TRUE) 
-plot(traps(ch[[1]]), add = TRUE, col = "red", pch = 16)
 
-#session 2
-plot(island_sp)
-plot(masklist[[2]], add = TRUE) 
-plot(traps(ch[[2]]), add = TRUE, col = "red", pch = 16)
+# check that mask covers all camera traps
 
-#check that masks cover the camera traps.......
-# session 1
-tr1 <- as.data.frame(traps(ch[[1]]))
+tr <- as.data.frame(traps(ch))
 
-xr <- range(masklist[[1]]$x)
-yr <- range(masklist[[1]]$y)
+xr <- range(mask$x)
+yr <- range(mask$y)
 
-tr1$inside_extent <-
-  tr1$x >= xr[1] &
-  tr1$x <= xr[2] &
-  tr1$y >= yr[1] &
-  tr1$y <= yr[2]
+tr$inside_extent <-
+  tr$x >= xr[1] &
+  tr$x <= xr[2] &
+  tr$y >= yr[1] &
+  tr$y <= yr[2]
 
-table(tr1$inside_extent) # good
-
-# session 2
-tr2 <- as.data.frame(traps(ch[[2]]))
-
-xr <- range(masklist[[2]]$x)
-yr <- range(masklist[[2]]$y)
-
-tr2$inside_extent <-
-  tr2$x >= xr[1] &
-  tr2$x <= xr[2] &
-  tr2$y >= yr[1] &
-  tr2$y <= yr[2]
-
-table(tr2$inside_extent) # good
+table(tr$inside_extent)

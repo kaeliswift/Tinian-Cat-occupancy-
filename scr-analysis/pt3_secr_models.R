@@ -11,19 +11,17 @@ library(ggplot2)
 library(readr)
 library(terra)
 
-# 23. Read in needed objects #####################################
+# 1. Read in needed objects #####################################
 
 # capture history (ch) (script to create this in pt1_secr_formatting.R)
-ch <- read.capthist(
-  captfile = "capt_all.txt",
-  trapfile = list("traps_year1.txt", "traps_year2.txt"),
-  detector = "count",
-  fmt = "trapID"
-) # should say: no errors found :-)
+ch <- readRDS("ch.RDS")
+verify(ch)  # should say: no errors found :-)
 
 # mask (script to create this in pt2_secr_mask.R)
-masklist <- readRDS("masklist.rds")
+mask <- readRDS("mask.rds")
 verify(masklist)
+
+# 1a. read-in old session models ##############################################
 
 # null model
 m0 <- readRDS("m0.rds")
@@ -66,13 +64,13 @@ summary(mg0habitat)
 AIC(m0, mDhabitat, mg0habitat, mDshore) #not comparable 
 AIC(m0, mg0habitat) 
 
-# 24. Code used to create the above models #####################################
+# 2. Code used to create the models ###########################################
 # DO NOT RUN THIS CODE UNLESS YOU NEED TO RERUN A MODEL #################
 
-# null models #############################
-m0 <- secr.fit(
+# 2a. null models #############################
+c0 <- secr.fit(
   ch,
-  mask = masklist,
+  mask = mask,
   model = list(
     D ~ 1,
     g0 ~ 1,
@@ -81,16 +79,16 @@ m0 <- secr.fit(
   detectfn = "halfnormal"
 )
 
-summary(m0)
-AIC(m0) #1430
+summary(c0)
+AIC(c0) 
 
-saveRDS(m0, file = "m0.rds")
-m0 <- readRDS("m0.rds")
+saveRDS(c0, file = "c0.rds")
+c0 <- readRDS("c0.rds")
 
 # null model with hazard rate
-m0HR <- secr.fit(
+c0HR <- secr.fit(
   ch,
-  mask = masklist,
+  mask = mask,
   model = list(
     D ~ 1,
     g0 ~ 1,
@@ -99,13 +97,13 @@ m0HR <- secr.fit(
   detectfn = 1 # hazard rate
 )
 
-summary(m0HR)
-AIC(m0, m0HR) 
+summary(c0HR)
+AIC(c0, c0HR) 
 
 # null model with exponential
-m0EX <- secr.fit(
+c0EX <- secr.fit(
   ch,
-  mask = masklist,
+  mask = mask,
   model = list(
     D ~ 1,
     g0 ~ 1,
@@ -114,117 +112,59 @@ m0EX <- secr.fit(
   detectfn = 2 #exponential
 )
 
-summary(m0EX)
-AIC(m0, m0HR, m0EX) #HR is best preforming detection rate but using HN for now because its estimates look better
+summary(c0EX)
+AIC(c0, c0HR, c0EX) #HR is best preforming detection rate but using HN for now because its estimates look better
 
 # continuing on with half normal detection rate for now 
 
-# D ~ covariate models ########################################
-# habitat model ################
-table(covariates(masklist[[1]])$habitat)
-table(covariates(masklist[[2]])$habitat) #largest value needs to be reference level -> tangantangan
+# 2b. D ~ covariate models ########################################
+#habitat model (WARNING - fails early) ##########################
+cDhabitat <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+  D ~ habitat,
+  g0 ~ 1,
+  sigma ~ 1),
+  detectfn = "halfnormal")
 
-#mDhabitat <- secr.fit(
- # ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ habitat,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+summary(cDhabitat) #SE for some still pretty large....
+AIC(c0, cDhabitat) #habitat is better > 10 AIC
 
-summary(mDhabitat) #SE for some still pretty large....
-AIC(m0, mDhabitat) #habitat is better > 10 AIC
+saveRDS(cDhabitat, file = "cDhabitat.rds")
+cDhabitat <- readRDS("cDhabitat.rds")
 
-#saveRDS(mDhabitat, file = "mDhabitat.rds")
-mDhabitat <- readRDS("mDhabitat.rds")
-
-#try graphing
-#session 1
-hold=predictDsurface(mDhabitat, mask = masklist[[1]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
-plot(hold)   #this one is boring cause we have no variation on D
-plot(traps(ch[[1]]),  add = TRUE, col = "red", pch = 16)
-
-#session 2
-hold=predictDsurface(mDhabitat, mask = masklist[[2]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
-plot(hold)   #this one is boring cause we have no variation on D
-plot(traps(ch[[2]]),  add = TRUE, col = "red", pch = 16)
-
-esaPlot(mDhabitat) #buffer size still ok~ 7000 m 
-
-# session model #################
-#mDsession <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ session,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDsession)
-AIC(m0, mDhabitat, mDsession) #worse than the null model
-
-#saveRDS(mDsession, file = "mDsession.rds")
-mDsession <- readRDS("mDsession.rds")
 
 # distance to shore model ##################
-#first scale the covariate
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.shore <- as.numeric(
-    scale(cv$d.to.shore)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
 
-#check that they are scaled
-summary(covariates(masklist[[1]])$d.to.shore)
-summary(covariates(masklist[[2]])$d.to.shore)
+cDshore <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+  D ~ d.to.shore_z,
+  g0 ~ 1,
+  sigma ~ 1),
+  detectfn = "halfnormal")
 
-#mDshore <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.shore,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+summary(cDshore)
+AIC(c0, cDshore) #best model so far
 
-summary(mDshore)
-AIC(m0, mDhabitat, mDsession, mDshore) #best model so far
+region.N(c0)
+region.N(cDshore)
 
-#saveRDS(mDshore, file = "mDshore.rds")
-mDshore <- readRDS("mDshore.rds")
+saveRDS(cDshore, file = "cDshore.rds")
+cDshore <- readRDS("mDshore.rds")
 
 #try graphing
-hold2=predictDsurface(mDshore, mask = masklist, se.D = FALSE, cl.D = FALSE, alpha =0.05)
-plot(hold2)  
-
-#session 1
-hold=predictDsurface(mDshore, mask = masklist[[1]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
+hold=predictDsurface(cDshore, mask = mask, se.D = FALSE, cl.D = FALSE, alpha =0.05)
 plot(island_poly)
 plot(hold, add = TRUE)  
-plot(traps(ch[[1]]),  add = TRUE, col = "red", pch = 16)
-
-#session 2
-hold=predictDsurface(mDshore, mask = masklist[[2]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
-plot(island_poly)
-plot(hold, add = TRUE)  
-plot(traps(ch[[2]]),  add = TRUE, col = "red", pch = 16)
+plot(traps(ch),  add = TRUE, col = "red", pch = 16)
 
 esaPlot(mDshore) # good
 plot(mDshore)
 
+# WILL NEED TO UPDATE BELOW MODELS #############################################
 # distance to shore ^2 model.............................
 #check that they are scaled
 summary(covariates(masklist[[1]])$d.to.shore)
@@ -943,11 +883,11 @@ region.N(
   spacing = 250)
 
 
-# h2 mixture models ############
+# 3. h2 mixture models ############
 #g0............
-mg0h2 <- secr.fit(
+cg0h2 <- secr.fit(
   ch,
-  mask = masklist,
+  mask = mask,
   model = list(
     D ~ 1,
     g0 ~ h2,
@@ -956,21 +896,26 @@ mg0h2 <- secr.fit(
   detectfn = "halfnormal"
 )
 
-summary(mg0h2)
-saveRDS(mg0h2, "mg0h2.rds")
-AIC(m0, mg0h2)
+summary(cg0h2)
+saveRDS(cg0h2, "mg0h2.rds")
+
+AIC(m0, cg0h2)
 
 region.N(
-  mg0h2,
+  c0,
   spacing = 250)
 
-mg0h2 <- readRDS("mg0h2.rds")
+region.N(
+  cg0h2,
+  spacing = 250)
+
+cg0h2 <- readRDS("cg0h2.rds")
 
 # sigma ~ h2 ........
 
-msigmah2 <- secr.fit(
+csigmah2 <- secr.fit(
   ch,
-  mask = masklist,
+  mask = mask,
   model = list(
     D ~ 1,
     g0 ~ 1,
@@ -980,33 +925,34 @@ msigmah2 <- secr.fit(
 )
 
 
-summary(msigmah2)
-saveRDS(msigmah2, "msigmah2.rds")
-AIC(m0, mg0h2, msigmah2)
+summary(csigmah2)
+saveRDS(csigmah2, "csigmah2.rds")
+AIC(c0, cg0h2, csigmah2)
 
-msigmah2 <- readRDS("msigmah2.rds")
+csigmah2 <- readRDS("csigmah2.rds")
 
 region.N(
-  msigmah2,
+  csigmah2,
   spacing = 250)
 
 #sigma ~ h2, D ~ d.to.shore
-mDshoresigmah2 <- secr.fit(
+cDshoresigmah2 <- secr.fit(
   ch,
-  mask = masklist,
+  mask = mask,
   model = list(
-    D ~ d.to.shore,
+    D ~ d.to.shore_z,
     g0 ~ 1,
     sigma ~ h2
   ),
   detectfn = "halfnormal"
 )
 
-summary(mDshoresigmah2)
-saveRDS(mDshoresigmah2, "mDshoresigmah2.rds")
+summary(cDshoresigmah2)
+saveRDS(cDshoresigmah2, "cDshoresigmah2.rds")
+
 region.N(
-  mDshoresigmah2,
+  cDshoresigmah2,
   spacing = 250)
 
-AIC(m0, mg0h2, msigmah2, mDshoresigmah2)
+AIC(c0, cg0h2, csigmah2, cDshoresigmah2)
 

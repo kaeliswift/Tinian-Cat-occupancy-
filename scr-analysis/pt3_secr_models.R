@@ -127,14 +127,49 @@ cDhabitat <- secr.fit(
   sigma ~ 1),
   detectfn = "halfnormal")
 
-summary(cDhabitat) #SE for some still pretty large....
+summary(cDhabitat) #Fails & SE for some pretty large....
 AIC(c0, cDhabitat) 
 
 saveRDS(cDhabitat, file = "cDhabitat.rds")
 cDhabitat <- readRDS("cDhabitat.rds")
 
+# cDhabitat produced a variance calculation warning (NaN SEs for some habitat coefficients),
+# indicating that the habitat effects were not well identified. However, this model received
+# essentially no support relative to the top model (ΔAICc > 30), so there is no need
+# to investigate the unstable parameter estimates further. 
 
-# distance to shore model ##################
+# The habitat model was not investigated further because it was poorly
+# supported (ΔAICc > 30 relative to the top model). The variance calculation
+# warning therefore has no effect on model selection or inference.
+
+# add habitat to traps to check which traps are where....
+trap_habitat <- addCovariates(traps(ch), mask)
+
+table(covariates(trap_habitat)$habitat)
+
+# count detections by habitat
+trapcov <- covariates(trap_habitat)
+
+capt <- as.data.frame(ch)
+
+capt$habitat <- trapcov[capt$TrapID, "habitat"]
+
+table(capt$habitat)
+
+
+capt <- as.data.frame(ch)
+
+trapinfo <- data.frame(
+  TrapID = rownames(traps(ch)),
+  habitat = covariates(trap_habitat)$habitat
+)
+
+capt2 <- merge(capt, trapinfo, by = "TrapID")
+
+table(capt2$habitat)
+
+
+# shore model ##################
 
 cDshore <- secr.fit(
   ch,
@@ -186,7 +221,7 @@ cDshoresq <- readRDS("cDshoresq.rds")
 # not considered further. The linear shoreline model was retained.
 
 
-# distance to nearest road model #################################
+# nearest road model #################################
 
 cDroad <- secr.fit(
   ch,
@@ -201,7 +236,7 @@ saveRDS(cDroad, file = "cDroad.rds")
 cDroad <- readRDS("cDroad.rds")
 
 
-# distance to shore + distance to road.................................
+# shore + road model ######################
 cDshore.road <- secr.fit(
   ch,
   mask = mask,
@@ -409,85 +444,13 @@ AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope,
 saveRDS(cDVOA, file = "cDVOA.rds")
 cDVOA <- readRDS("cDVOA.rds")
 
-# WILL NEED TO UPDATE BELOW MODELS #############################################
 
-# Final AIC comparison of density models #######################
+# AIC comparison #######################
 AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, 
     cDd.to.MLA, cDhumans, cDAirport, cDCampTinian, cDDump, cDNorthField,
     cDQuarry, cDTown, cDVOA, cDhabitat)
 
-# g0 ~ models ########################################
-# g0 ~ site_habitat
-#mg0habitat <- secr.fit(
-# ch,
-#mask = masklist,
-#model = list(
-# D ~ 1,
-#g0 ~ site_habitat,
-#sigma ~ 1
-#),
-#detectfn = "halfnormal"
-#) #fails b/c need same covariate levels in each session (do not match rn)
-
-# remove ironwood
-# recode Casuarina -> Mixed Introduced Forest
-for (s in seq_along(ch)) {
-  
-  tr <- traps(ch[[s]])
-  covs <- covariates(tr)
-  
-  covs$site_habitat[
-    covs$site_habitat == "Casuarina Thicket"
-  ] <- "Mixed Introduced Forest"
-  
-  covariates(tr) <- covs
-  traps(ch[[s]]) <- tr
-}
-
-# get all site_habitat levels after recoding
-all_levels <- sort(unique(unlist(lapply(ch, function(x) {
-  covariates(traps(x))$site_habitat
-}))))
-
-# enforce same levels in each session
-for (s in seq_along(ch)) {
-  
-  tr <- traps(ch[[s]])
-  covs <- covariates(tr)
-  
-  covs$site_habitat <- factor(
-    covs$site_habitat,
-    levels = all_levels
-  )
-  
-  covariates(tr) <- covs
-  traps(ch[[s]]) <- tr
-}
-
-#check it worked 
-lapply(ch, function(x)
-  levels(covariates(traps(x))$site_habitat)
-)
-
-# try refitting the model
-#mg0habitat <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ 1,
-#    g0 ~ site_habitat,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mg0habitat)
-AIC(m0, mDhabitat, mDsession, mDshore) #not comparable 
-AIC(m0, mg0habitat) #lower AIC but somehow still not comparable
-
-
-#saveRDS(mg0habitat, file = "mg0habitat.rds")
-mg0habitat <- readRDS("mg0habitat.rds")
+# BEWARE d.to.MLA and humans have r = 1.00 -- NEED TO SELECT ONE
 
 # 3. h2 mixture models ############
 #g0............
@@ -504,8 +467,9 @@ cg0h2 <- secr.fit(
 
 summary(cg0h2)
 saveRDS(cg0h2, "mg0h2.rds")
+cg0h2 <- readRDS("cg0h2.rds")
 
-AIC(m0, cg0h2)
+AIC(c0, cg0h2)
 
 region.N(
   c0,
@@ -515,7 +479,6 @@ region.N(
   cg0h2,
   spacing = 250)
 
-cg0h2 <- readRDS("cg0h2.rds")
 
 # sigma ~ h2 ........
 
@@ -533,36 +496,42 @@ csigmah2 <- secr.fit(
 
 summary(csigmah2)
 saveRDS(csigmah2, "csigmah2.rds")
-AIC(c0, cg0h2, csigmah2)
-
 csigmah2 <- readRDS("csigmah2.rds")
+
+AIC(c0, cg0h2, csigmah2)
 
 region.N(
   csigmah2,
   spacing = 250)
 
-#sigma ~ h2, D ~ d.to.shore
-cDshoresigmah2 <- secr.fit(
+#sigma ~ h2, D ~ d.to.MLA
+cDMLAsigmah2 <- secr.fit(
   ch,
   mask = mask,
   model = list(
-    D ~ d.to.shore_z,
+    D ~ d.to.MLA_z,
     g0 ~ 1,
     sigma ~ h2
   ),
   detectfn = "halfnormal"
 )
 
-summary(cDshoresigmah2)
-saveRDS(cDshoresigmah2, "cDshoresigmah2.rds")
+summary(cDMLAsigmah2)
+saveRDS(cDMLAsigmah2, "cDMLAsigmah2.rds")
 
 region.N(
-  cDshoresigmah2,
+  cDMLAsigmah2,
   spacing = 250)
 
-AIC(c0, cg0h2, csigmah2, cDshoresigmah2)
+region.N(
+  c0,
+  spacing = 250)
 
-# 25. Calculate N with top model ###############################################
+AIC(c0, cg0h2, csigmah2, cDMLAsigmah2)
+
+
+
+# 4. N within the MLA ########################################################
 # Estimating abundance & avg density in MLA 
 MLA_boundary <- st_read("C:\\Users\\celin\\OneDrive\\Desktop\\Tinian_GIS_layers\\MLA_boundary\\MLA_Boundary_2025.shp")
 
@@ -573,10 +542,10 @@ MLA_boundary <- st_transform(MLA_boundary, 32655)
 
 #read in shapefile data
 tinian <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp"
-)
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp")
 # make sure CRS matches traps
-st_crs(tinian)
+st_crs(tinian) 
+
 # dissolve polygons into single island boundary
 island_boundary <- st_union(tinian)
 island_poly <- vect(island_boundary)
@@ -584,63 +553,53 @@ island_poly <- vect(island_boundary)
 plot(island_poly)
 plot(MLA_boundary, add = TRUE, border = "red", lwd = 2)
 
-#extract mask coordinates.....
+
+#extract MLA_mask coordinates from mask.....
 mask_xy <- st_as_sf(
-  as.data.frame(masklist[[1]]),
+  as.data.frame(mask),
   coords = c("x", "y"),
   crs = st_crs(MLA_boundary)
 )
 
 inside <- lengths(st_within(mask_xy, MLA_boundary)) > 0
 
-mask_MLA <- masklist[[1]][inside, ]
+mask_MLA <- mask[inside, ]
 
-covariates(mask_MLA) <- covariates(masklist[[1]])[inside, ]
+covariates(mask_MLA) <- covariates(mask)[inside, ]
 
 summary(mask_MLA)
 head(covariates(mask_MLA))
 
+#cDd.to.MLA model...................
+
 #calculate abundance in MLA
 region.N(
-  mDshore,
+  cDd.to.MLA,
   region = mask_MLA,
   spacing = 250)
 
 # calculate abundance in study area
 region.N(
-  mDshore,
+  cDd.to.MLA,
   spacing = 250)
 
-# Trial of different functions #################
-closedN(ch)
+# csigmah2 model...................
+
+#calculate abundance in MLA
+region.N(
+  csigmah2,
+  region = mask_MLA,
+  spacing = 250)
+
+# calculate abundance in study area
+region.N(
+  csigmah2,
+  spacing = 250)
+
+# 5. Useful functions #####################################
+closedN(ch) #assumes closed population
 
 suggest.buffer(mDshore) #~9000 m for both sessions
 
-# trying to see if things change with session effects
-mDshore.sess <- secr.fit(
-  ch,
-  mask = masklist,
-  model = list(
-    D ~ d.to.shore + session,
-    g0 ~ 1,
-    sigma ~ 1
-  ),
-  detectfn = "halfnormal"
-)
 
-summary(mDshore.sess)
-saveRDS(mDshore.sess, "mDshore_sess.rds")
-AIC(m0, mDshore, mDshore.sess)
 
-mDshore.sess <- readRDS("mDshore_sess.rds")
-
-#calculate abundance in MLA
-region.N(
-  mDshore.sess,
-  region = mask_MLA,
-  spacing = 250)
-
-# calculate abundance in study area
-region.N(
-  mDshore.sess,
-  spacing = 250)

@@ -529,7 +529,7 @@ plot(mask, covariate = "slope", pch = 15, cex = 0.6, add = TRUE)
 plot(traps(ch), add = TRUE, pch = 16)
 
 # 12. Save mask as rds object  ###################################################
-saveRDS(mask, file = "mask.rds")
+saveRDS(mask, file = "rds")
 masklist <- readRDS("masklist.rds")
 
 # 13. Check for mismatch of traps and mask #####################################

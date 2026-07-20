@@ -14,12 +14,12 @@ library(terra)
 # 1. Load TrapTagger Data #############################################
 raw.data <- read.csv("TrapTagger_Cat_Individuals.csv")
 
-#Removing None & unidentifiable detection & separating | detections
+#Removing None/unidentifiable  detection & separating | detections & setting time zone
 data <- raw.data %>%
   filter(Individuals != "None") %>%
   mutate(Individuals = str_trim(Individuals)) %>%
   separate_rows(Individuals, sep = "\\|") %>%
-  filter(Individuals != "unidentifiable") %>%
+  filter(Individuals != "unidentifiable") %>% 
   mutate(DateTime = mdy_hm(Timestamp, tz = "Pacific/Guam"))
 
 # 2. Load Deployment Data ############################################
@@ -37,11 +37,9 @@ start_end[10, "Termination"] <- "11/15/2024"
 
 #Format time data and add Session..............
 start_end <- start_end %>%
-  mutate(
-    Deployment = mdy_hms(paste(Deployment, "00:00:00"), tz = "Pacific/Guam"),
+  mutate(Deployment = mdy_hms(paste(Deployment, "00:00:00"), tz = "Pacific/Guam"),
     Termination = mdy_hms(paste(Termination, "23:59:59"), tz = "Pacific/Guam"),
-    Session = ifelse(year(Deployment) == 2024, 1, 2)
-  )
+    Session = ifelse(year(Deployment) == 2024, 1, 2))
 
 # 3. Filter cat data to within study period ###################################
 problem_children <- start_end[c(8,11,19),] #filters for J6,J4,G41
@@ -60,12 +58,9 @@ data.prob_child <- data %>%
 data <- rbind(data.first_set, data.prob_child)
 
 # 4. Define Session & Clean detections to > 30 min apart #######################
-
 data <- data %>%
-  mutate(
-    Session = ifelse(year(DateTime) == 2024, 1, 2),
-    Animal = Individuals 
-  )
+  mutate(Session = ifelse(year(DateTime) == 2024, 1, 2),
+    Animal = Individuals)
 
 #Filters to detection > 30 min apart (clusters are 30 min apart)................
 data <- data %>%
@@ -75,27 +70,18 @@ data <- data %>%
   ungroup()
 
 # 5. Session-wide Occasions ####################################################
-# occasion start dates are the same per session
-session_starts <- tibble(
-  Session = c(1, 2),
-  SessionStart = as.POSIXct(
-    c("2024-10-17 00:00:00",
-      "2025-04-24 00:00:00"),
-    tz = "Pacific/Guam"
-  )
-)
-
-# create occasions per session................
+# occasion start dates are camera deployment dates
 data <- data %>%
-  left_join(session_starts, by = "Session") %>%
-  mutate(
-    Occasion = floor(as.numeric(difftime(DateTime, SessionStart, units = "days")) / 7) + 1
-  ) %>%
-  filter(Occasion >= 1 & Occasion <= 6)
+  mutate(Occasion = floor(as.numeric(difftime(DateTime, Deployment, units = "days")) / 7) + 1) 
+
+# filter to 1-6 occasions
+table(data$Occasion)
+data <- data %>% filter(Occasion >= 1 & Occasion <= 6)
 
 # 6. Define TrapID ##########################################################
 data <- data %>%
   mutate(TrapID = Site.Name)
+
 
 # 7. Format Trap Data ########################################################
 traps.data <- read.csv("cat_cam_deployment_landcover_type.csv") %>%
@@ -111,66 +97,223 @@ coords <- st_coordinates(traps.sf)
 traps.data <- traps.data %>%
   mutate(x = coords[,1], y = coords[,2])
 
-# creating separate trapfiles per session
-trapIDs_year1 <- start_end %>% filter(Session == 1) %>% pull(Site.Name)
-trapIDs_year2 <- start_end %>% filter(Session == 2) %>% pull(Site.Name)
+#traps combined (no sessions)
+traps_combined <- traps.data %>% select(TrapID, x, y)
 
-traps_year1 <- traps.data %>% filter(TrapID %in% trapIDs_year1) %>% select(TrapID, x, y)
-traps_year2 <- traps.data %>% filter(TrapID %in% trapIDs_year2) %>% select(TrapID, x, y)
+# 8. Attach effort #############################################################
+# Create effort matrix function 
+make_usage_matrix <- function(traps_df, deploy_df) {
+  
+  trap_ids <- traps_df$TrapID
+  deploy_sess <- deploy_df 
+  
+  usage_mat <- matrix(
+    0,
+    nrow = length(trap_ids),
+    ncol = 6,
+    dimnames = list(trap_ids, paste0("occ", 1:6))
+  )
+  
+  for(i in seq_along(trap_ids)) {
+    
+    trap_info <- deploy_sess %>%
+      filter(Site.Name == trap_ids[i])
+    
+    if(nrow(trap_info) == 0) next
+    
+    # First deployment for this trap
+    trap_start <- min(trap_info$Deployment)
+    
+    for(k in 1:6) {
+      
+      occ_start <- trap_start + days((k - 1) * 7)
+      occ_end   <- occ_start + days(7) - seconds(1)
+      
+      total_overlap <- 0
+      
+      for(j in 1:nrow(trap_info)) {
+        
+        overlap_start <- max(trap_info$Deployment[j], occ_start)
+        overlap_end   <- min(trap_info$Termination[j], occ_end)
+        
+        if(overlap_end > overlap_start) {
+          total_overlap <- total_overlap +
+            as.numeric(difftime(overlap_end, overlap_start, units = "days"))
+        }
+      }
+      
+      usage_mat[i, k] <- round(min(1, total_overlap / 7), 3)
+    }
+  }
+  
+  usage_mat
+}
+
+# Build Usage/Effort Matrices 
+usage_combined <- make_usage_matrix(traps_combined, start_end)
+
+usage_combined
 
 
+# INSPECT # of cats in both sessions ########################################
+cats_both <- data %>%
+  distinct(Individuals, Session) %>%   # one row per cat per session
+  count(Individuals) %>%               # number of sessions each cat appears in
+  filter(n > 1)
 
-# 8. Create txt Files for secr ################################################
-capt <- data %>% select(Session, Animal, Occasion, TrapID)
+cats_both
+
+cats_both_ids <- cats_both$Individuals
+
+# Join trap coordinates onto every detection
+detections <- data %>%
+  left_join(traps.data, by = c("TrapID"))
+
+# calculate the shift in activity "center" in m
+centers <- detections %>%
+  filter(Individuals %in% cats_both_ids) %>%
+  group_by(Individuals, Session) %>%
+  summarize(
+    meanX = mean(as.numeric(x)),
+    meanY = mean(as.numeric(y)),
+    nDetections = n(),
+    .groups = "drop"
+  )
+
+centers_mean <- centers %>%
+  select(-nDetections) %>%   # remove session-specific count
+  pivot_wider(
+    names_from = Session,
+    values_from = c(meanX, meanY)
+  ) %>%
+  mutate(
+    shift_m = sqrt((meanX_2 - meanX_1)^2 +
+                     (meanY_2 - meanY_1)^2)
+  )
+
+centers_mean
+
+# find closest distance btw cameras btw sessions
+cat_both_cameras <- detections %>%
+  filter(Individuals %in% cats_both_ids) %>%
+  distinct(Individuals, Session, TrapID, x, y)
+
+min_dist_pair <- cat_both_cameras %>%
+  group_by(Individuals) %>%
+  group_modify(~{
+    
+    s1 <- distinct(filter(.x, Session == 1), TrapID, x, y)
+    s2 <- distinct(filter(.x, Session == 2), TrapID, x, y)
+    
+    if (nrow(s1) == 0 || nrow(s2) == 0) {
+      return(tibble(
+        min_distance_m = NA_real_,
+        trap_s1 = NA_character_,
+        trap_s2 = NA_character_
+      ))
+    }
+    
+    # calculate only cross-session distances
+    cross <- outer(
+      1:nrow(s1),
+      1:nrow(s2),
+      Vectorize(function(i, j) {
+        sqrt((s1$x[i] - s2$x[j])^2 +
+               (s1$y[i] - s2$y[j])^2)
+      })
+    )
+    
+    min_index <- which(cross == min(cross), arr.ind = TRUE)
+    
+    tibble(
+      min_distance_m = min(cross),
+      trap_s1 = s1$TrapID[min_index[1, 1]],
+      trap_s2 = s2$TrapID[min_index[1, 2]]
+    )
+    
+  }) %>%
+  ungroup()
+
+min_dist_pair
+
+# checking max distance btw cameras btw sessions
+home_range_span <- cat_both_cameras %>%
+  group_by(Individuals, Session) %>%
+  group_modify(~{
+    coords <- distinct(.x, TrapID, x, y)
+    
+    if(nrow(coords) < 2){
+      return(tibble(max_camera_distance_m = 0))
+    }
+    
+    tibble(
+      max_camera_distance_m = max(as.matrix(dist(coords[,c("x","y")])))
+    )
+  })
+
+home_range_span
+
+# how many cameras the cats showed up on
+camera_summary <- cat_both_cameras %>%
+  group_by(Individuals, Session) %>%
+  summarize(
+    n_cameras = n_distinct(TrapID),
+    cameras = paste(sort(unique(TrapID)), collapse = ", "),
+    .groups = "drop"
+  )
+
+camera_summary
+
+# 9. Create txt Files for secr ################################################
+# DROPPING SESSIONS TO COMBINE 
+capt <- data %>% select(Animal, Occasion, TrapID,
+                        #Session
+                        )
+
+capt_count <- data %>%
+  group_by(Individuals, Occasion, TrapID) %>%
+  summarise(
+    Count = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Session = 3   # combines Session 1 & 2 (Session 3 is imaginary/the combined of 1 & 2)
+  ) %>%
+  select(Session, Individuals, Occasion, TrapID, Count)
+
+head(capt_count)
 
 # all capture history data
-write.table(capt, "capt_all.txt",
+write.table(capt_count, "capt_count.txt",
             row.names = FALSE, col.names = FALSE,
             quote = FALSE, sep = "\t")
 
-# trap info session 1
-write.table(traps_year1, "traps_year1.txt",
+# trap info 
+write.table(traps_combined, "traps_combined.txt",
             row.names = FALSE, col.names = FALSE,
             quote = FALSE, sep = "\t")
 
-# trap info session 2
-write.table(traps_year2, "traps_year2.txt",
-            row.names = FALSE, col.names = FALSE,
-            quote = FALSE, sep = "\t")
 
-# 9. Create Capture History ####################################################
+
+# 10. Create Capture History ####################################################
 ch <- read.capthist(
-  captfile = "capt_all.txt",
-  trapfile = list("traps_year1.txt", "traps_year2.txt"),
+  captfile = "capt_count.txt",
+  trapfile = "traps_combined.txt",
   detector = "count",
   fmt = "trapID"
 ) # should say: no errors found :-)
 
-# Add Traps covariates ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-traps1 <- traps(ch[[1]])
-traps2 <- traps(ch[[2]])
-
-traps_year1 <- traps.data %>% filter(TrapID %in% trapIDs_year1) %>% select(TrapID, x, y, CLASS.landcover)
-traps_year2 <- traps.data %>% filter(TrapID %in% trapIDs_year2) %>% select(TrapID, x, y, CLASS.landcover)
-
-# Add CLASS.landcover covariate to Traps (site-specific covariate) .............
-covariates(traps1) <- data.frame(site_habitat = traps_year1$CLASS.landcover)
-covariates(traps2) <- data.frame(site_habitat = traps_year2$CLASS.landcover)
-
-traps(ch[[1]]) <- traps1
-traps(ch[[2]]) <- traps2
-
-table(covariates(traps(ch[[1]]))) #worked
-table(covariates(traps(ch[[2]])))
+# Attach Usage/Effort 
+usage(traps(ch)) <- usage_combined
 
 
-# Inspect new ch ###################################################################
+
+# 11. Inspect new ch ###################################################################
 summary(ch)
+traps(ch)
 plot(ch, tracks = TRUE)
 
-usage(traps(ch[[1]]))[1:42, ] #currently no usage -> ran into errors due to full usage in session 2 & partial usage in session 1
-usage(traps(ch[[2]]))[1:8, ]                      # session 1 is still mainly covered so will ignore usage for now 
-
+saveRDS(ch, "ch.rds")
 
 # SKIP BELLOW UNLESS YOU NEED TO INSPECT BUFFER SIZE OR EFFORT ##################
 
@@ -178,20 +321,20 @@ usage(traps(ch[[2]]))[1:8, ]                      # session 1 is still mainly co
 #estimate of sigma HN to suggest buffer size
 #buffer size is usually 4 sigma HN
 RPSV(ch, CC = TRUE)
-#session 1 = 1773 * 4 = 7092
-#session 2 = 697 * 4 = 2788
+# 1867.963 * 4 = 7471.852
 
 # different estimate of buffer for HN
 suggest.buffer(ch, detectfn = 'HN', RBtarget = 0.001)
-# session 1 = 7790
-# session 2 = 3160
+# 8170
 
 #run the null model with a half normal detection
 cats.HN7000 <-secr.fit(ch, buffer=7000, trace = FALSE)
 
 cats.HN7000 
 
-cats.mask <- secr.fit(ch, mask=masklist, trace = FALSE)
+cats.HN8000 <-secr.fit(ch, buffer=8000, trace = FALSE)
+
+cats.HN8000
 
 #plot buffer width (m) x n/esa(buffer)ha
 par(pty = "s",mar = c(4,4,2,2),mgp =c(2.5,0.8,0),las =1)
@@ -199,7 +342,7 @@ esaPlot(cats.HN7000,ylim =c(0,4))
 abline(v=7000, col ="red",lty =2)
 
 suggest.buffer(cats.HN7000) #both ~11000 m -> weird
-suggest.buffer(cats.mask) #8000 and 9000 m -> not as bad
+suggest.buffer(cats.HN8000) #8000 and 9000 m -> not as bad
 
 
 # Checking D estimates & changes in buffer size #################################
@@ -208,21 +351,19 @@ suggest.buffer(cats.mask) #8000 and 9000 m -> not as bad
 #decide on final buffer
 
 #Exploring buffer sizes
-buffers <- c(3000, 5000, 7000, 9000, 11000) #checking 3 km to 11 km 
+buffers <- c(3000, 5000, 7000, 9000, 11000, 13000) #checking 3 km to 11 km 
 
 #read in shapefile data
 # you will have to download and direct R to your GIS layers (they are too big to store in the repo)
 
 tinian <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp"
-)
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp")
 
 # make sure CRS matches traps
 st_crs(tinian)
 
 # dissolve polygons into single island boundary
 island_boundary <- st_union(tinian)
-plot(island_boundary)
 
 # run function that changes buffer to calculate several D estimates
 fits <- lapply(buffers, function(b) { #THIS WILL TAKE A LOT OF TIME 
@@ -249,120 +390,98 @@ fits <- readRDS("D_buffer_fits.rds")
 
 # extract density values (D) from fits
 D_values <- sapply(fits, function(fit) {
-  sapply(derived(fit), function(x) x["D","estimate"])
+  derived(fit)["D", "estimate"]
 })
 
 #plot estimates vs buffer size
-D_df <- as.data.frame(t(D_values))
-colnames(D_df) <- c("Session1", "Session2")
+D_df <- data.frame(
+  buffer = buffers,
+  D = D_values
+)
 
-D_df$buffer <- buffers
+D_df
 
-D_long <- D_df %>%
-  pivot_longer(cols = starts_with("Session"),
-               names_to = "Session",
-               values_to = "D")
-
-ggplot(D_long, aes(x = buffer, y = D, color = Session)) +
-  geom_line() +
-  geom_point() +
-  labs(title = "Density vs Buffer Size",
-       x = "Buffer (m)",
-       y = "Density (D)") +
-  theme_minimal()
-
-
-#separate session plots: PAY CLOSE ATTENTION TO Y-VALUES
-ggplot(subset(D_long, Session == "Session1"),
-       aes(x = buffer, y = D)) +
-  geom_line() +
-  geom_point() +
-  labs(title = "Session 1: Density vs Buffer Size",
-       x = "Buffer (m)",
-       y = "Density (D)") +
-  theme_minimal()
-
-ggplot(subset(D_long, Session == "Session2"),
-       aes(x = buffer, y = D)) +
-  geom_line() +
-  geom_point() +
-  labs(title = "Session 2: Density vs Buffer Size",
-       x = "Buffer (m)",
-       y = "Density (D)") +
-  theme_minimal()
+plot(
+  D_df$buffer,
+  D_df$D,
+  type = "b",
+  xlab = "Buffer distance (m)",
+  ylab = "Density (cats/ha)"
+)
 
 
 #checking if D estimate stabilizes by looking at values
+D_df
 
-#session 1
-sapply(fits, function(fit) {
-  derived(fit)[[1]]["D","estimate"]}) #shows D estimates
-#session 2 
-sapply(fits, function(fit) {
-  derived(fit)[[2]]["D","estimate"]}) #shows D estimates
+#check in N stabilizes 
+region.N(fits[[which(buffers == 7000)]])
+region.N(fits[[which(buffers == 9000)]])
+region.N(fits[[which(buffers == 11000)]])
 
-#both sessions 
-sapply(fits, function(fit) {sapply(derived(fit), function(x) x["D","estimate"])})
+# Ok trying again but including 8000 m..............
+#Exploring buffer sizes
+buffers <- c(7000, 8000, 9000, 10000, 11000) #checking 7 km to 11 km 
 
-#graphing
-D_values <- sapply(fits, function(fit) {
-  sapply(derived(fit), function(x) x["D","estimate"])
-})
-
-matplot(buffers, t(D_values), type = "b", pch = 1:2, col = 1:2,
-        xlab = "Buffer (m)", ylab = "D estimate", lty = 1:2)
-legend("topright", legend=c("Session 1","Session 2"), pch=1:2, lty=1:2)
-
-#Choosing Buffer = 7000 for now!!!!!!!!
-
-# Create effort matrix function ################################################
-make_usage_matrix <- function(session_num, traps_df, deploy_df, n_occasions = 6) {
+# run function that changes buffer to calculate several D estimates
+fits <- lapply(buffers, function(b) { #THIS WILL TAKE A LOT OF TIME 
   
-  trap_ids <- traps_df$TrapID
-  deploy_sess <- deploy_df %>% filter(Session == session_num)
-  
-  usage_mat <- matrix(
-    0,
-    nrow = length(trap_ids),
-    ncol = n_occasions,
-    dimnames = list(trap_ids, paste0("occ", 1:n_occasions))
+  mask_b <- make.mask(
+    traps(ch),
+    buffer = b,
+    spacing = 250, #can change this
+    type = "trapbuffer", #restricts the grid to points within distance buffer of any detector.
+    poly = vect(island_boundary)
   )
   
-  session_start <- min(deploy_sess$Deployment)
-  
-  for(i in seq_along(trap_ids)) {
-    
-    trap_info <- deploy_sess %>%
-      filter(Site.Name == trap_ids[i])
-    
-    if(nrow(trap_info) == 0) next
-    
-    for(k in 1:n_occasions) {
-      
-      occ_start <- session_start + days((k - 1) * 7)
-      occ_end   <- occ_start + days(7) - seconds(1)
-      
-      total_overlap <- 0
-      
-      for(j in 1:nrow(trap_info)) {
-        
-        overlap_start <- max(trap_info$Deployment[j], occ_start)
-        overlap_end   <- min(trap_info$Termination[j], occ_end)
-        
-        overlap_days <- as.numeric(difftime(overlap_end, overlap_start, units = "days"))
-        overlap_days <- max(0, overlap_days)
-        
-        total_overlap <- total_overlap + overlap_days
-      }
-      
-      usage_mat[i, k] <- round(min(1, total_overlap / 7), 3)
-    }
-  }
-  
-  usage_mat
-}
+  secr.fit(
+    ch,
+    mask = mask_b,
+    detectfn = 0   # half normal
+  )
+})
 
-# Inspect ch of cats ###################################################################
+
+saveRDS(fits, file = "D_buffer_fits.rds")
+fits <- readRDS("D_buffer_fits.rds")
+
+
+# extract density values (D) from fits
+D_values <- sapply(fits, function(fit) {
+  derived(fit)["D", "estimate"]
+})
+
+#plot estimates vs buffer size
+D_df <- data.frame(
+  buffer = buffers,
+  D = D_values
+)
+
+D_df
+
+plot(
+  D_df$buffer,
+  D_df$D,
+  type = "b",
+  xlab = "Buffer distance (m)",
+  ylab = "Density (cats/ha)"
+)
+
+
+#checking if D estimate stabilizes by looking at values
+D_df
+
+#check in N stabilizes 
+region.N(fits[[which(buffers == 7000)]])
+region.N(fits[[which(buffers == 8000)]])
+region.N(fits[[which(buffers == 9000)]])
+region.N(fits[[which(buffers == 10000)]])
+region.N(fits[[which(buffers == 11000)]])
+
+#Choosing Buffer = 8000 for now!!!!!!!!
+suggest.buffer(fits[[2]])
+esaPlot(fits[[2]])
+
+# Inspect ch of individual cats ###################################################################
 summary(ch)
 plot(ch, tracks = TRUE)
 
@@ -536,16 +655,3 @@ summary.table.sess2
 
 write.csv(summary.table.sess2, "session2_detections.csv")
 
-
-# Build Usage/Effort Matrices ##################################################
-
-usage_year1 <- make_usage_matrix(1, traps_year1, start_end)
-usage_year2 <- make_usage_matrix(2, traps_year2, start_end)
-
-
-# Attach Usage/Effort ##########################################################
-
-usage(traps(ch[[1]])) <- usage_year1
-usage(traps(ch[[2]])) <- usage_year2
-
-#model failed w/ usage info --> most likely due to constant usage in session 2

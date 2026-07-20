@@ -11,19 +11,17 @@ library(ggplot2)
 library(readr)
 library(terra)
 
-# 23. Read in needed objects #####################################
+# 1. Read in needed objects #####################################
 
 # capture history (ch) (script to create this in pt1_secr_formatting.R)
-ch <- read.capthist(
-  captfile = "capt_all.txt",
-  trapfile = list("traps_year1.txt", "traps_year2.txt"),
-  detector = "count",
-  fmt = "trapID"
-) # should say: no errors found :-)
+ch <- readRDS("ch.RDS")
+verify(ch)  # should say: no errors found :-)
 
 # mask (script to create this in pt2_secr_mask.R)
-masklist <- readRDS("masklist.rds")
-verify(masklist)
+mask <- readRDS("mask.rds")
+verify(mask)
+
+# 1a. read-in old session models ##############################################
 
 # null model
 m0 <- readRDS("m0.rds")
@@ -66,13 +64,12 @@ summary(mg0habitat)
 AIC(m0, mDhabitat, mg0habitat, mDshore) #not comparable 
 AIC(m0, mg0habitat) 
 
-# 24. Code used to create the above models #####################################
+# 2. Code used to create the models ###########################################
 # DO NOT RUN THIS CODE UNLESS YOU NEED TO RERUN A MODEL #################
-
-# null models #############################
-m0 <- secr.fit(
+# 2a. null models #############################
+c0 <- secr.fit(
   ch,
-  mask = masklist,
+  mask = mask,
   model = list(
     D ~ 1,
     g0 ~ 1,
@@ -81,16 +78,16 @@ m0 <- secr.fit(
   detectfn = "halfnormal"
 )
 
-summary(m0)
-AIC(m0) #1430
+summary(c0)
+AIC(c0) 
 
-saveRDS(m0, file = "m0.rds")
-m0 <- readRDS("m0.rds")
+saveRDS(c0, file = "c0.rds")
+c0 <- readRDS("c0.rds")
 
 # null model with hazard rate
-m0HR <- secr.fit(
+c0HR <- secr.fit(
   ch,
-  mask = masklist,
+  mask = mask,
   model = list(
     D ~ 1,
     g0 ~ 1,
@@ -99,13 +96,13 @@ m0HR <- secr.fit(
   detectfn = 1 # hazard rate
 )
 
-summary(m0HR)
-AIC(m0, m0HR) 
+summary(c0HR)
+AIC(c0, c0HR) 
 
 # null model with exponential
-m0EX <- secr.fit(
+c0EX <- secr.fit(
   ch,
-  mask = masklist,
+  mask = mask,
   model = list(
     D ~ 1,
     g0 ~ 1,
@@ -114,752 +111,427 @@ m0EX <- secr.fit(
   detectfn = 2 #exponential
 )
 
-summary(m0EX)
-AIC(m0, m0HR, m0EX) #HR is best preforming detection rate but using HN for now because its estimates look better
+summary(c0EX)
+AIC(c0, c0HR, c0EX) #HR is best preforming detection rate but using HN for now because its estimates look better
 
 # continuing on with half normal detection rate for now 
 
-# D ~ covariate models ########################################
-# habitat model ################
-table(covariates(masklist[[1]])$habitat)
-table(covariates(masklist[[2]])$habitat) #largest value needs to be reference level -> tangantangan
+# 2b. D ~ covariate models ########################################
+#habitat model (WARNING - fails early) ##########################
+cDhabitat <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+  D ~ habitat,
+  g0 ~ 1,
+  sigma ~ 1),
+  detectfn = "halfnormal")
 
-#mDhabitat <- secr.fit(
- # ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ habitat,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+summary(cDhabitat) #Fails & SE for some pretty large....
+AIC(c0, cDhabitat) 
 
-summary(mDhabitat) #SE for some still pretty large....
-AIC(m0, mDhabitat) #habitat is better > 10 AIC
+saveRDS(cDhabitat, file = "cDhabitat.rds")
+cDhabitat <- readRDS("cDhabitat.rds")
 
-#saveRDS(mDhabitat, file = "mDhabitat.rds")
-mDhabitat <- readRDS("mDhabitat.rds")
+# cDhabitat produced a variance calculation warning (NaN SEs for some habitat coefficients),
+# indicating that the habitat effects were not well identified. However, this model received
+# essentially no support relative to the top model (ΔAICc > 30), so there is no need
+# to investigate the unstable parameter estimates further. 
 
-#try graphing
-#session 1
-hold=predictDsurface(mDhabitat, mask = masklist[[1]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
-plot(hold)   #this one is boring cause we have no variation on D
-plot(traps(ch[[1]]),  add = TRUE, col = "red", pch = 16)
+# The habitat model was not investigated further because it was poorly
+# supported (ΔAICc > 30 relative to the top model). The variance calculation
+# warning therefore has no effect on model selection or inference.
 
-#session 2
-hold=predictDsurface(mDhabitat, mask = masklist[[2]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
-plot(hold)   #this one is boring cause we have no variation on D
-plot(traps(ch[[2]]),  add = TRUE, col = "red", pch = 16)
+# add habitat to traps to check which traps are where....
+trap_habitat <- addCovariates(traps(ch), mask)
 
-esaPlot(mDhabitat) #buffer size still ok~ 7000 m 
+table(covariates(trap_habitat)$habitat)
 
-# session model #################
-#mDsession <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ session,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+# count detections by habitat
+trapcov <- covariates(trap_habitat)
 
-summary(mDsession)
-AIC(m0, mDhabitat, mDsession) #worse than the null model
+capt <- as.data.frame(ch)
 
-#saveRDS(mDsession, file = "mDsession.rds")
-mDsession <- readRDS("mDsession.rds")
+capt$habitat <- trapcov[capt$TrapID, "habitat"]
 
-# distance to shore model ##################
-#first scale the covariate
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.shore <- as.numeric(
-    scale(cv$d.to.shore)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+table(capt$habitat)
 
-#check that they are scaled
-summary(covariates(masklist[[1]])$d.to.shore)
-summary(covariates(masklist[[2]])$d.to.shore)
 
-#mDshore <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.shore,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+capt <- as.data.frame(ch)
 
-summary(mDshore)
-AIC(m0, mDhabitat, mDsession, mDshore) #best model so far
+trapinfo <- data.frame(
+  TrapID = rownames(traps(ch)),
+  habitat = covariates(trap_habitat)$habitat
+)
 
-#saveRDS(mDshore, file = "mDshore.rds")
-mDshore <- readRDS("mDshore.rds")
+capt2 <- merge(capt, trapinfo, by = "TrapID")
+
+table(capt2$habitat)
+
+
+# shore model ##################
+
+cDshore <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+  D ~ d.to.shore_z,
+  g0 ~ 1,
+  sigma ~ 1),
+  detectfn = "halfnormal")
+
+summary(cDshore)
+AIC(c0, cDshore) #best model so far
+
+region.N(c0)
+region.N(cDshore)
+
+saveRDS(cDshore, file = "cDshore.rds")
+cDshore <- readRDS("cDshore.rds")
 
 #try graphing
-hold2=predictDsurface(mDshore, mask = masklist, se.D = FALSE, cl.D = FALSE, alpha =0.05)
-plot(hold2)  
-
-#session 1
-hold=predictDsurface(mDshore, mask = masklist[[1]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
+hold=predictDsurface(cDshore, mask = mask, se.D = FALSE, cl.D = FALSE, alpha =0.05)
 plot(island_poly)
 plot(hold, add = TRUE)  
-plot(traps(ch[[1]]),  add = TRUE, col = "red", pch = 16)
-
-#session 2
-hold=predictDsurface(mDshore, mask = masklist[[2]], se.D = FALSE, cl.D = FALSE, alpha =0.05)
-plot(island_poly)
-plot(hold, add = TRUE)  
-plot(traps(ch[[2]]),  add = TRUE, col = "red", pch = 16)
+plot(traps(ch),  add = TRUE, col = "red", pch = 16)
 
 esaPlot(mDshore) # good
 plot(mDshore)
 
+hist(covariates(mask)$d.to.shore_z)
+
 # distance to shore ^2 model.............................
-#check that they are scaled
-summary(covariates(masklist[[1]])$d.to.shore)
-summary(covariates(masklist[[2]])$d.to.shore)
+cDshoresq <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+  D ~ I(d.to.shore_z) + I(d.to.shore_z^2),
+  g0 ~ 1,
+  sigma ~ 1 ), 
+  detectfn = "halfnormal")
 
-#mDshoresq <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.shore + I(d.to.shore^2),
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+summary(cDshoresq)
 
-summary(mDshoresq)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, mDshoresq)
-
-#saveRDS(mDshoresq, file = "mDshoresq.rds")
-mDshoresq <- readRDS("mDshoresq.rds")
-
-# distance to shore ^3 model...................
-summary(covariates(masklist[[1]])$d.to.shore)
-summary(covariates(masklist[[2]])$d.to.shore)
-
-#mDshorecubed <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.shore + I(d.to.shore^2) + I(d.to.shore^3),
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDshorecubed)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, mDshoresq, mDshorecubed)
-
-#saveRDS(mDshorecubed, file = "mDshorecubed.rds")
-mDshorecubed <- readRDS("mDshorecubed.rds")
+saveRDS(cDshoresq, file = "cDshoresq.rds")
+cDshoresq <- readRDS("cDshoresq.rds")
 
 
-# distance to nearest road model #################################
-#first scale the covariate
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.road <- as.numeric(
-    scale(cv$d.to.road)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
-
-#check that they are scaled
-summary(covariates(masklist[[1]])$d.to.road)
-summary(covariates(masklist[[2]])$d.to.road)
-
-#mDroad <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.road,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDroad)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad)
-
-#saveRDS(mDroad, file = "mDroad.rds")
-mDroad <- readRDS("mDroad.rds")
+# Quadratic model failed to converge to a meaningful solution
+# (nlm code 5; non-identifiable parameter estimates), so it was
+# not considered further. The linear shoreline model was retained.
 
 
-# distance to shore + distance to road.................................
-#check that they are scaled
-summary(covariates(masklist[[1]])$d.to.shore)
-summary(covariates(masklist[[2]])$d.to.shore)
+# nearest road model #################################
 
-summary(covariates(masklist[[1]])$d.to.road)
-summary(covariates(masklist[[2]])$d.to.road)
+cDroad <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(D ~ d.to.road_z, g0 ~ 1, sigma ~ 1),
+  detectfn = "halfnormal")
 
-#mDshore.road <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.shore + d.to.road,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+summary(cDroad)
+AIC(c0, cDshore, cDroad)
 
-summary(mDshore.road)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, mDshoresq, mDshore.road, mDshorecubed)
+saveRDS(cDroad, file = "cDroad.rds")
+cDroad <- readRDS("cDroad.rds")
 
-#saveRDS(mDshore.road, file = "mDshore.road.rds")
-mDshore.road <- readRDS("mDshore.road.rds")
+
+# shore + road model ######################
+cDshore.road <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(D ~ d.to.shore_z + d.to.road_z, g0 ~ 1, sigma ~ 1),
+  detectfn = "halfnormal")
+
+summary(cDshore.road)
+AIC(c0, cDshore, cDroad, cDshore.road)
+
+saveRDS(cDshore.road, file = "cDshore.road.rds")
+cDshore.road <- readRDS("cDshore.road.rds")
 
 # elevation model ######################################
-summary(covariates(masklist[[1]])$elev)
-summary(covariates(masklist[[2]])$elev)
+cDelev <- secr.fit(ch,
+                   mask = mask,
+                   model = list(D ~ elev_z, g0 ~ 1, sigma ~ 1),
+                   detectfn = "halfnormal")
 
-# scale elevation per session
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$elev <- as.numeric(
-    scale(cv$elev)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+summary(cDelev)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev)
 
-summary(covariates(masklist[[1]])$elev) 
-summary(covariates(masklist[[2]])$elev)
 
-#mDelev <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ elev,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDelev)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev)
-
-#saveRDS(mDelev, file = "mDelev.rds")
-mDelev <- readRDS("mDelev.rds")
+saveRDS(cDelev, file = "cDelev.rds")
+cDelev <- readRDS("cDelev.rds")
 
 # elev^2 model...............
-summary(covariates(masklist[[1]])$elev) 
-summary(covariates(masklist[[2]])$elev)
+cDelevsq <- secr.fit(ch,
+                   mask = mask,
+                   model = list(D ~ elev_z + I(elev_z^2), g0 ~ 1, sigma ~ 1),
+                   detectfn = "halfnormal")
 
-#mDelevsq <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ elev + I(elev^2),
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+summary(cDelevsq)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq)
 
-summary(mDelevsq)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDelevsq)
 
-#saveRDS(mDelevsq, file = "mDelevsq.rds")
-mDelevsq <- readRDS("mDelevsq.rds")
+saveRDS(cDelevsq, file = "cDelevsq.rds")
+cDelevsq <- readRDS("cDelevsq.rds")
+
+# elev^3 model...............
+cDelevcubed <- secr.fit(ch,
+                     mask = mask,
+                     model = list(D ~ elev_z + I(elev_z^2) +I(elev_z^3), g0 ~ 1, sigma ~ 1),
+                     detectfn = "halfnormal")
+
+summary(cDelevcubed)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDelevcubed)
+
+
+saveRDS(cDelevcubed, file = "cDelevcubed.rds")
+cDelevcubed <- readRDS("cDelevcubed.rds")
+
 
 # slope model ######################################
-summary(covariates(masklist[[1]])$slope)
-summary(covariates(masklist[[2]])$slope)
+cDslope <- secr.fit(ch,
+                   mask = mask,
+                   model = list(D ~ slope_z, g0 ~ 1, sigma ~ 1), 
+                   detectfn = "halfnormal")
 
-# scale slope per session
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$slope <- as.numeric(
-    scale(cv$slope)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
-
-summary(covariates(masklist[[1]])$slope) 
-summary(covariates(masklist[[2]])$slope)
+summary(cDslope)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope)
 
 
-#mDslope <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ slope,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+saveRDS(cDslope, file = "cDslope.rds")
+cDslope <- readRDS("cDslope.rds") 
 
-summary(mDslope)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDslope)
+hist(covariates(mask)$slope_z)
 
-#saveRDS(mDslope, file = "mDslope.rds")
-mDslope <- readRDS("mDslope.rds") 
+# MLA area models ###############################
+#Inside/outside MLA activity areas model ...............
+cDMLA <- secr.fit(ch,
+                  mask = mask,
+                  model = list(D ~ MLA, g0 ~ 1, sigma ~ 1),
+                  detectfn = "halfnormal")
+
+summary(cDMLA)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, cDMLA)
 
 
-# MLA models ###############################
-# Inside/outside MLA activity areas model ...............
-#mDMLA <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ MLA,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDMLA)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA)
-
-#saveRDS(mDMLA, file = "mDMLA.rds")
-mDMLA <- readRDS("mDMLA.rds")
+# Quadratic model failed to converge to a meaningful solution
+# (nlm code 5; non-identifiable parameter estimates), so it was
+# not considered further. 
 
 # Distance to MLA activity areas model ...............
-#first scale the covariate
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.MLA <- as.numeric(
-    scale(cv$d.to.MLA)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+cDd.to.MLA <- secr.fit(ch,
+                       mask = mask,
+                       model = list(D ~ d.to.MLA_z, g0 ~ 1, sigma ~ 1),
+                       detectfn = "halfnormal")
 
-#check that they are scaled
-summary(covariates(masklist[[1]])$d.to.MLA)
-summary(covariates(masklist[[2]])$d.to.MLA)
+summary(cDd.to.MLA)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, cDd.to.MLA)
 
-#mDd.to.MLA <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.MLA,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+saveRDS(cDd.to.MLA, file = "cDd.to.MLA.rds")
+cDd.to.MLA <- readRDS("cDd.to.MLA.rds")
 
-summary(mDd.to.MLA)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA)
+hist(covariates(mask)$d.to.MLA_z)
 
-#saveRDS(mDd.to.MLA, file = "mDd.to.MLA.rds")
-mDd.to.MLA <- readRDS("mDd.to.MLA.rds")
-
-# distance from human areas models ###################################
+# human areas models ###################################
 # human activity areas model ......................
-summary(covariates(masklist[[1]])$d.to.humans)
-summary(covariates(masklist[[2]])$d.to.humans)
+cDhumans <- secr.fit(ch,
+                     mask = mask,
+                     model = list(D ~ d.to.humans_z, g0 ~ 1, sigma ~ 1),
+                     detectfn = "halfnormal")
 
-# scale distance to human activity areas
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.humans <- as.numeric(
-    scale(cv$d.to.humans)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+summary(cDhumans)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, cDd.to.MLA, cDhumans)
 
-summary(covariates(masklist[[1]])$d.to.humans) 
-summary(covariates(masklist[[2]])$d.to.humans)
 
-#mDhumans <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.humans,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+saveRDS(cDhumans, file = "cDhumans.rds")
+cDhumans <- readRDS("cDhumans.rds")
 
-summary(mDhumans)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDhumans)
-
-#saveRDS(mDhumans, file = "mDhumans.rds")
-mDhumans <- readRDS("mDhumans.rds")
-
-# check what covariates are available 
-summary(covariates(masklist[[1]]))
+# check what covariates are available........................... 
+summary(covariates(mask))
 
 # Airport model ...............................
-summary(covariates(masklist[[1]])$d.to.Airport)
-summary(covariates(masklist[[2]])$d.to.Airport)
+cDAirport <- secr.fit(ch,
+                      mask = mask,
+                      model = list(D ~ d.to.Airport_z, g0 ~ 1, sigma ~ 1),
+                      detectfn = "halfnormal")
 
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.Airport <- as.numeric(
-    scale(cv$d.to.Airport)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+summary(cDAirport)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, 
+    cDd.to.MLA, cDhumans, cDAirport)
 
-summary(covariates(masklist[[1]])$d.to.Airport) 
-summary(covariates(masklist[[2]])$d.to.Airport)
 
-#mDAirport <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.Airport,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDAirport)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDhumans, mDAirport)
-
-#saveRDS(mDAirport, file = "mDAirport.rds")
-mDAirport <- readRDS("mDAirport.rds")
+saveRDS(cDAirport, file = "cDAirport.rds")
+cDAirport <- readRDS("cDAirport.rds")
 
 # Camp Tinian model ........................
-summary(covariates(masklist[[1]])$d.to.CampTinian)
-summary(covariates(masklist[[2]])$d.to.CampTinian)
+cDCampTinian <- secr.fit(ch,
+                         mask = mask,
+                         model = list(D ~ d.to.CampTinian_z, g0 ~ 1, sigma ~ 1),
+                         detectfn = "halfnormal")
 
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.CampTinian <- as.numeric(
-    scale(cv$d.to.CampTinian)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+summary(cDCampTinian)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, 
+    cDd.to.MLA, cDhumans, cDAirport, cDCampTinian)
 
-summary(covariates(masklist[[1]])$d.to.CampTinian) 
-summary(covariates(masklist[[2]])$d.to.CampTinian)
-
-#mDCampTinian <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.CampTinian,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDCampTinian)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDhumans, mDAirport,
-    mDCampTinian)
-
-#saveRDS(mDCampTinian, file = "mDCampTinian.rds")
-mDCampTinian <- readRDS("mDCampTinian.rds")
+saveRDS(cDCampTinian, file = "cDCampTinian.rds")
+cDCampTinian <- readRDS("cDCampTinian.rds")
 
 # Dump model .......................................
-summary(covariates(masklist[[1]])$d.to.Dump)
-summary(covariates(masklist[[2]])$d.to.Dump)
+cDDump <- secr.fit(ch,
+                   mask = mask,
+                   model = list(D ~ d.to.Dump_z, g0 ~ 1, sigma ~ 1),
+                   detectfn = "halfnormal")
 
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.Dump <- as.numeric(
-    scale(cv$d.to.Dump)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+summary(cDDump)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, 
+    cDd.to.MLA, cDhumans, cDAirport, cDCampTinian, cDDump)
 
-summary(covariates(masklist[[1]])$d.to.Dump) 
-summary(covariates(masklist[[2]])$d.to.Dump)
-
-#mDDump <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.Dump,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDDump)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDhumans, mDAirport,
-    mDCampTinian, mDDump)
-
-#saveRDS(mDDump, file = "mDDump.rds")
-mDDump <- readRDS("mDDump.rds")
+saveRDS(cDDump, file = "cDDump.rds")
+cDDump <- readRDS("cDDump.rds")
 
 # North Field model.........................
-summary(covariates(masklist[[1]])$d.to.NorthField)
-summary(covariates(masklist[[2]])$d.to.NorthField)
+cDNorthField <- secr.fit(ch,
+                         mask = mask,
+                         model = list(D ~ d.to.NorthField_z, g0 ~ 1, sigma ~ 1),
+                         detectfn = "halfnormal")
 
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.NorthField <- as.numeric(
-    scale(cv$d.to.NorthField)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+summary(cDNorthField)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, 
+    cDd.to.MLA, cDhumans, cDAirport, cDCampTinian, cDDump, cDNorthField)
 
-summary(covariates(masklist[[1]])$d.to.NorthField) 
-summary(covariates(masklist[[2]])$d.to.NorthField)
-
-#mDNF <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.NorthField,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDNF)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDhumans, mDAirport,
-    mDCampTinian, mDDump, mDNF)
-
-#saveRDS(mDNF, file = "mDNF.rds")
-mDNF <- readRDS("mDNF.rds")
+saveRDS(cDNorthField, file = "cDNorthField.rds")
+cDNorthField <- readRDS("cDNorthField.rds")
 
 # Quarry model .......................................
-summary(covariates(masklist[[1]])$d.to.Quarry)
-summary(covariates(masklist[[2]])$d.to.Quarry)
+cDQuarry <- secr.fit(ch,
+                     mask = mask,
+                     model = list(D ~ d.to.Quarry_z, g0 ~ 1, sigma ~ 1),
+                     detectfn = "halfnormal")
 
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.Quarry <- as.numeric(
-    scale(cv$d.to.Quarry)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+summary(cDQuarry)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, 
+    cDd.to.MLA, cDhumans, cDAirport, cDCampTinian, cDDump, cDNorthField,
+    cDQuarry)
 
-summary(covariates(masklist[[1]])$d.to.Quarry) 
-summary(covariates(masklist[[2]])$d.to.Quarry)
-
-#mDQuarry <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.Quarry,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDQuarry)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDhumans, mDAirport,
-    mDCampTinian, mDDump, mDNF, mDQuarry)
-
-#saveRDS(mDQuarry, file = "mDQuarry.rds")
-mDQuarry <- readRDS("mDQuarry.rds")
+saveRDS(cDQuarry, file = "cDQuarry.rds")
+cDQuarry <- readRDS("cDQuarry.rds")
 
 # Town model ................................. 
-summary(covariates(masklist[[1]])$d.to.Town)
-summary(covariates(masklist[[2]])$d.to.Town)
+cDTown <- secr.fit(ch,
+                   mask = mask,model = list(D ~ d.to.Town_z, g0 ~ 1, sigma ~ 1),
+                   detectfn = "halfnormal")
 
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.Town <- as.numeric(
-    scale(cv$d.to.Town)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+summary(cDTown)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, 
+    cDd.to.MLA, cDhumans, cDAirport, cDCampTinian, cDDump, cDNorthField,
+    cDQuarry, cDTown)
 
-summary(covariates(masklist[[1]])$d.to.Town) 
-summary(covariates(masklist[[2]])$d.to.Town)
-
-#mDTown <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.Town,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
-
-summary(mDTown)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDhumans, mDAirport,
-    mDCampTinian, mDDump, mDNF, mDQuarry, mDTown)
-
-#saveRDS(mDTown, file = "mDTown.rds")
-mDTown <- readRDS("mDTown.rds")
+saveRDS(cDTown, file = "cDTown.rds")
+cDTown <- readRDS("cDTown.rds")
 
 # VOA model ..............................
-summary(covariates(masklist[[1]])$d.to.VOA)
-summary(covariates(masklist[[2]])$d.to.VOA)
+cDVOA <- secr.fit(ch,
+                  mask = mask,
+                  model = list(D ~ d.to.VOA_z, g0 ~ 1, sigma ~ 1),
+                  detectfn = "halfnormal")
 
-for(i in 1:2) {
-  
-  cv <- covariates(masklist[[i]])
-  
-  cv$d.to.VOA <- as.numeric(
-    scale(cv$d.to.VOA)
-  )
-  
-  covariates(masklist[[i]]) <- cv
-}
+summary(cDVOA)
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, 
+    cDd.to.MLA, cDhumans, cDAirport, cDCampTinian, cDDump, cDNorthField,
+    cDQuarry, cDTown, cDVOA)
 
-summary(covariates(masklist[[1]])$d.to.VOA) 
-summary(covariates(masklist[[2]])$d.to.VOA)
+saveRDS(cDVOA, file = "cDVOA.rds")
+cDVOA <- readRDS("cDVOA.rds")
 
-#mDVOA <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ d.to.VOA,
-#    g0 ~ 1,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
 
-summary(mDVOA)
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDMLA, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDhumans, mDAirport,
-    mDCampTinian, mDDump, mDNF, mDQuarry, mDTown, mDVOA,
-    mDslope, mDelevsq)
+# AIC comparison #######################
+AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, 
+    cDd.to.MLA, cDhumans, cDAirport, cDCampTinian, cDDump, cDNorthField,
+    cDQuarry, cDTown, cDVOA, cDhabitat)
 
-#saveRDS(mDVOA, file = "mDVOA.rds")
-mDVOA <- readRDS("mDVOA.rds")
+# BEWARE d.to.MLA and humans have r = 1.00 -- NEED TO SELECT ONE
 
-# Final AIC comparison of desired models #######################
-AIC(m0, mDhabitat, mDsession, mDshore, mDroad, mDshore.road, mDd.to.MLA, 
-    mDshoresq, mDshorecubed, mDelev, mDelevsq, mDhumans, mDAirport,
-    mDCampTinian, mDDump, mDNF, mDQuarry, mDTown, mDVOA,
-    mDslope)
-
-# g0 ~ models ########################################
-# g0 ~ site_habitat
-#mg0habitat <- secr.fit(
-# ch,
-#mask = masklist,
-#model = list(
-# D ~ 1,
-#g0 ~ site_habitat,
-#sigma ~ 1
-#),
-#detectfn = "halfnormal"
-#) #fails b/c need same covariate levels in each session (do not match rn)
-
-# remove ironwood
-# recode Casuarina -> Mixed Introduced Forest
-for (s in seq_along(ch)) {
-  
-  tr <- traps(ch[[s]])
-  covs <- covariates(tr)
-  
-  covs$site_habitat[
-    covs$site_habitat == "Casuarina Thicket"
-  ] <- "Mixed Introduced Forest"
-  
-  covariates(tr) <- covs
-  traps(ch[[s]]) <- tr
-}
-
-# get all site_habitat levels after recoding
-all_levels <- sort(unique(unlist(lapply(ch, function(x) {
-  covariates(traps(x))$site_habitat
-}))))
-
-# enforce same levels in each session
-for (s in seq_along(ch)) {
-  
-  tr <- traps(ch[[s]])
-  covs <- covariates(tr)
-  
-  covs$site_habitat <- factor(
-    covs$site_habitat,
-    levels = all_levels
-  )
-  
-  covariates(tr) <- covs
-  traps(ch[[s]]) <- tr
-}
-
-#check it worked 
-lapply(ch, function(x)
-  levels(covariates(traps(x))$site_habitat)
+# 3. h2 mixture models ############
+#g0............
+cg0h2 <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+    D ~ 1,
+    g0 ~ h2,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
 )
 
-# try refitting the model
-#mg0habitat <- secr.fit(
-#  ch,
-#  mask = masklist,
-#  model = list(
-#    D ~ 1,
-#    g0 ~ site_habitat,
-#    sigma ~ 1
-#  ),
-#  detectfn = "halfnormal"
-#)
+summary(cg0h2)
+saveRDS(cg0h2, "mg0h2.rds")
+cg0h2 <- readRDS("cg0h2.rds")
 
-summary(mg0habitat)
-AIC(m0, mDhabitat, mDsession, mDshore) #not comparable 
-AIC(m0, mg0habitat) #lower AIC but somehow still not comparable
+AIC(c0, cg0h2)
+
+region.N(
+  c0,
+  spacing = 250)
+
+region.N(
+  cg0h2,
+  spacing = 250)
 
 
-#saveRDS(mg0habitat, file = "mg0habitat.rds")
-mg0habitat <- readRDS("mg0habitat.rds")
+# sigma ~ h2 ........
 
-# 25. Calculate N with top model ###############################################
+csigmah2 <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+    D ~ 1,
+    g0 ~ 1,
+    sigma ~ h2
+  ),
+  detectfn = "halfnormal"
+)
+
+
+summary(csigmah2)
+saveRDS(csigmah2, "csigmah2.rds")
+csigmah2 <- readRDS("csigmah2.rds")
+
+AIC(c0, cg0h2, csigmah2)
+
+region.N(
+  csigmah2,
+  spacing = 250)
+
+#sigma ~ h2, D ~ d.to.MLA
+cDMLAsigmah2 <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+    D ~ d.to.MLA_z,
+    g0 ~ 1,
+    sigma ~ h2
+  ),
+  detectfn = "halfnormal"
+)
+
+summary(cDMLAsigmah2)
+saveRDS(cDMLAsigmah2, "cDMLAsigmah2.rds")
+
+region.N(
+  cDMLAsigmah2,
+  spacing = 250)
+
+region.N(
+  c0,
+  spacing = 250)
+
+AIC(c0, cg0h2, csigmah2, cDMLAsigmah2)
+
+
+
+# 4. N within the MLA ########################################################
 # Estimating abundance & avg density in MLA 
 MLA_boundary <- st_read("C:\\Users\\celin\\OneDrive\\Desktop\\Tinian_GIS_layers\\MLA_boundary\\MLA_Boundary_2025.shp")
 
@@ -870,10 +542,10 @@ MLA_boundary <- st_transform(MLA_boundary, 32655)
 
 #read in shapefile data
 tinian <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp"
-)
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp")
 # make sure CRS matches traps
-st_crs(tinian)
+st_crs(tinian) 
+
 # dissolve polygons into single island boundary
 island_boundary <- st_union(tinian)
 island_poly <- vect(island_boundary)
@@ -881,132 +553,53 @@ island_poly <- vect(island_boundary)
 plot(island_poly)
 plot(MLA_boundary, add = TRUE, border = "red", lwd = 2)
 
-#extract mask coordinates.....
+
+#extract MLA_mask coordinates from mask.....
 mask_xy <- st_as_sf(
-  as.data.frame(masklist[[1]]),
+  as.data.frame(mask),
   coords = c("x", "y"),
   crs = st_crs(MLA_boundary)
 )
 
 inside <- lengths(st_within(mask_xy, MLA_boundary)) > 0
 
-mask_MLA <- masklist[[1]][inside, ]
+mask_MLA <- mask[inside, ]
 
-covariates(mask_MLA) <- covariates(masklist[[1]])[inside, ]
+covariates(mask_MLA) <- covariates(mask)[inside, ]
 
 summary(mask_MLA)
 head(covariates(mask_MLA))
 
+#cDd.to.MLA model...................
+
 #calculate abundance in MLA
 region.N(
-  mDshore,
+  cDd.to.MLA,
   region = mask_MLA,
   spacing = 250)
 
 # calculate abundance in study area
 region.N(
-  mDshore,
+  cDd.to.MLA,
   spacing = 250)
 
-# Trial of different functions #################
-closedN(ch)
+# csigmah2 model...................
+
+#calculate abundance in MLA
+region.N(
+  csigmah2,
+  region = mask_MLA,
+  spacing = 250)
+
+# calculate abundance in study area
+region.N(
+  csigmah2,
+  spacing = 250)
+
+# 5. Useful functions #####################################
+closedN(ch) #assumes closed population
 
 suggest.buffer(mDshore) #~9000 m for both sessions
 
-# trying to see if things change with session effects
-mDshore.sess <- secr.fit(
-  ch,
-  mask = masklist,
-  model = list(
-  D ~ d.to.shore + session,
-  g0 ~ 1,
-  sigma ~ 1
-  ),
-  detectfn = "halfnormal"
-)
 
-summary(mDshore.sess)
-saveRDS(mDshore.sess, "mDshore_sess.rds")
-AIC(m0, mDshore, mDshore.sess)
-
-mDshore.sess <- readRDS("mDshore_sess.rds")
-
-#calculate abundance in MLA
-region.N(
-  mDshore.sess,
-  region = mask_MLA,
-  spacing = 250)
-
-# calculate abundance in study area
-region.N(
-  mDshore.sess,
-  spacing = 250)
-
-
-# h2 mixture models ############
-#g0............
-mg0h2 <- secr.fit(
-  ch,
-  mask = masklist,
-  model = list(
-    D ~ 1,
-    g0 ~ h2,
-    sigma ~ 1
-  ),
-  detectfn = "halfnormal"
-)
-
-summary(mg0h2)
-saveRDS(mg0h2, "mg0h2.rds")
-AIC(m0, mg0h2)
-
-region.N(
-  mg0h2,
-  spacing = 250)
-
-mg0h2 <- readRDS("mg0h2.rds")
-
-# sigma ~ h2 ........
-
-msigmah2 <- secr.fit(
-  ch,
-  mask = masklist,
-  model = list(
-    D ~ 1,
-    g0 ~ 1,
-    sigma ~ h2
-  ),
-  detectfn = "halfnormal"
-)
-
-
-summary(msigmah2)
-saveRDS(msigmah2, "msigmah2.rds")
-AIC(m0, mg0h2, msigmah2)
-
-msigmah2 <- readRDS("msigmah2.rds")
-
-region.N(
-  msigmah2,
-  spacing = 250)
-
-#sigma ~ h2, D ~ d.to.shore
-mDshoresigmah2 <- secr.fit(
-  ch,
-  mask = masklist,
-  model = list(
-    D ~ d.to.shore,
-    g0 ~ 1,
-    sigma ~ h2
-  ),
-  detectfn = "halfnormal"
-)
-
-summary(mDshoresigmah2)
-saveRDS(mDshoresigmah2, "mDshoresigmah2.rds")
-region.N(
-  mDshoresigmah2,
-  spacing = 250)
-
-AIC(m0, mg0h2, msigmah2, mDshoresigmah2)
 

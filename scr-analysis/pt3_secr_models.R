@@ -114,6 +114,9 @@ c0EX <- secr.fit(
 summary(c0EX)
 AIC(c0, c0HR, c0EX) #HR is best preforming detection rate but using HN for now because its estimates look better
 
+summary(c0HR)
+
+region.N(c0)
 # continuing on with half normal detection rate for now 
 
 # 2b. D ~ covariate models ########################################
@@ -529,9 +532,38 @@ region.N(
 
 AIC(c0, cg0h2, csigmah2, cDMLAsigmah2)
 
+# 4. bk models ###############################################################
+# bk checks if there is a animal X site learned response
+# interpretation can get tricky though if detector = "count" for ch which it does
+
+cbk <-  secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+    D ~ 1,
+    g0 ~ bk,
+    sigma ~ 1                     
+  ),
+  detectfn = "halfnormal"
+)
+
+AIC(c0, cbk)    
+
+cbksigma <-  secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+    D ~ 1,
+    g0 ~ 1,
+    sigma ~ bk                     
+  ),
+  detectfn = "halfnormal"
+)
+
+AIC(c0, cbk, cbksigma) 
 
 
-# 4. N within the MLA ########################################################
+# 5. N within the MLA ########################################################
 # Estimating abundance & avg density in MLA 
 MLA_boundary <- st_read("C:\\Users\\celin\\OneDrive\\Desktop\\Tinian_GIS_layers\\MLA_boundary\\MLA_Boundary_2025.shp")
 
@@ -596,7 +628,7 @@ region.N(
   csigmah2,
   spacing = 250)
 
-# 5. Useful functions #####################################
+# 6. Useful functions #####################################
 closedN(ch) #assumes closed population
 
 suggest.buffer(mDshore) #~9000 m for both sessions

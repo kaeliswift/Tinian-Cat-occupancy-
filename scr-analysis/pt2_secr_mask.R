@@ -11,12 +11,15 @@ library(ggplot2)
 library(readr)
 library(terra)
 
+# 1. Read in ch #################################################################
+ch <- readRDS("m_ch.RDS")
+summary(ch) #good
 
-# 10. Read habitat shapefile  #####################################
+
+# 2. Read habitat shapefile  #####################################
 # you will have to download and direct R to your GIS layers (they are too big to store in the repo)
 tinian <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp"
-)
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp")
 
 # make sure CRS matches traps
 st_crs(tinian)
@@ -27,14 +30,11 @@ island_boundary <- st_union(tinian)
 plot((island_boundary)) #shows island boundary
 
 # create spatial polygon.... more clear for secr
-island_sp <- as(
-  st_cast(island_boundary, "MULTIPOLYGON"),
-  "Spatial"
-)
+# convert island_boundary to SpatVect
+island_poly <- vect(island_boundary)
 
-plot(island_sp)
 
-# 11. Reclassify habitat ##########################################
+# 3. Reclassify habitat ##########################################
 tinian <- tinian %>%
   mutate(
     habitat = case_when(
@@ -48,8 +48,10 @@ tinian <- tinian %>%
   )
 
 table(tinian$habitat, useNA = "ifany")
+# will have to fill the NAs 
 
-# 12. Rasterize habitat ###########################################
+
+# 4. Rasterize habitat ###########################################
 tinian_v <- vect(tinian)
 
 # convert habitat to factor
@@ -69,51 +71,60 @@ habitat_raster <- rasterize(
 
 plot(habitat_raster) #nice
 
-# 13. Read in more covariates #################################
+# 5. Read in more covariates #################################
 
-# define shoreline
+# define shoreline...............
 shoreline <- st_boundary(island_boundary)
+
+st_crs(shoreline) == st_crs(tinian) #good
+
 plot(shoreline)
 
-# define roads 
+# define roads................... 
 roads <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/Tinian_roads/Roads Tinian.shp"
-)
-plot(roads["GlobalID"])
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/Tinian_roads/Roads Tinian.shp")
 
 roads <- st_geometry(roads)
 plot(roads)
 
-# make sure roads has epsg (missing w/o below command)
-st_crs(roads) <- st_crs(tinian) 
+st_crs(roads) == st_crs(tinian) #bad
+roads <- st_transform(roads, st_crs(tinian))
+st_crs(roads) == st_crs(tinian) #good
 
-# define MLA activity areas
+# define MLA activity areas....................
 MLA_activity <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/MLA_activity_areas/MLA_activity areas.shp"
-)
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/MLA_activity_areas/MLA_activity areas.shp")
 
-plot(st_geometry(island_boundary))
+st_crs(MLA_activity) == st_crs(tinian) # looks ok
+
+plot(island_poly)
 plot(st_geometry(MLA_activity), add = TRUE, col = "red")
 
 MLA_activity <- st_geometry(MLA_activity)
 
-# extract elevation
+
+# extract elevation............................
 elev <- rast("C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/tinian_dem")
-crs(elev)
+
+st_crs(elev) == st_crs(tinian) # bad
+
+st_crs(elev) #makes sure to add EPSG
 crs(elev) <- "EPSG:32655"
+
+st_crs(elev) == st_crs(tinian) # looks ok
 
 plot(elev)
 
-# extract slope from elevation
+# extract slope from elevation...............
 slope <- terrain(
   elev,
   v = "slope",
   unit = "degrees",
   neighbors = 8
-)
+) #THIS WILL BE SLOW
 
 
-# extract human areas separately & together
+# extract human areas separately & together..................
 humans <- st_read(
   "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/Human_activity/humans.shp")
 
@@ -184,10 +195,7 @@ legend(
 
 humans <- st_geometry(humans)
 
-# 14. Create masks per session w/ covariates  ##################################
-
-# convert island_boundary to SpatVect
-island_poly <- vect(island_boundary)
+# 6. Create masks per session w/ covariates  ##################################
 
 # create session masks..................................................................
 masklist <- lapply(
@@ -351,21 +359,27 @@ masklist <- lapply(
   }
 )
 
+# 7. Inspect mask points ######################################################
+verify(masklist) #fails b/c it is a list of 2 masks
 
-# 15. Inspect mask points ######################################################
-nrow(masklist[[1]]) #1580
-nrow(masklist[[2]]) #945
+verify(masklist[[1]]) #good
+verify(masklist[[2]]) #good
 
-# check covariates
+# force secr to recognize multi-session mask
+class(masklist) <- c("mask", "list")
+verify(masklist)
+
+summary(masklist) #NAs in habitat & elev & slope ---- will need to fix
+
+nrow(masklist[[1]]) #1580 pts in session 1
+nrow(masklist[[2]]) #945 pts in session 1
+
 summary(covariates(masklist[[1]]))
 summary(covariates(masklist[[2]]))
 
-
 # check habitat 
 summary(covariates(masklist[[1]])$habitat)
-summary(covariates(masklist[[2]])$habitat) 
-
-#will need to reassign NAs
+summary(covariates(masklist[[2]])$habitat) #will need to reassign NAs
 
 # check d.to.shore
 summary(covariates(masklist[[1]])$d.to.shore)
@@ -390,11 +404,36 @@ summary(masklist[[2]])
 # check structure of masks
 verify(masklist[[1]]) #good
 verify(masklist[[2]]) #good
-verify(masklist) #issue -> will need to correct
+verify(masklist) 
 
 # check all covariates there
 names(covariates(masklist[[1]]))
 names(covariates(masklist[[2]]))
+
+# 8. Replace and NAs with nearest neighbor #############################################for (i in seq_along(masklist)) {
+for (i in seq_along(masklist)) {
+  
+  covs <- covariates(masklist[[i]])
+  
+  h <- covs$habitat   #habitat
+  mode <- names(which.max(table(h)))
+  h[is.na(h)] <- mode
+  covs$habitat <- droplevels(h)
+  
+  covs$elev[is.na(covs$elev)] <- median(covs$elev, na.rm = TRUE) #elevation
+  covs$slope[is.na(covs$slope)] <- median(covs$slope, na.rm = TRUE) #slope
+  
+  covariates(masklist[[i]]) <- covs
+}
+
+# check the NAs are gone
+for (i in seq_along(masklist)) {
+  cat("\nSession", i, "\n")
+  
+  print(colSums(is.na(covariates(masklist[[i]]))))
+}
+
+# STOPPED HERE ##########################################################
 
 # 16. Check covariate correlations  ############################################
 # check numeric covariate correlation (r > 0.5 not good)

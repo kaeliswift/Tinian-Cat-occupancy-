@@ -433,9 +433,8 @@ for (i in seq_along(masklist)) {
   print(colSums(is.na(covariates(masklist[[i]]))))
 }
 
-# STOPPED HERE ##########################################################
 
-# 16. Check covariate correlations  ############################################
+# 8. Check covariate correlations  ############################################
 # check numeric covariate correlation (r > 0.5 not good)
 # distance to shore & road correlation check
 cor(
@@ -482,12 +481,68 @@ cor(
 ) #not good r = 0.67 ---> exclude d.to.shore + elev model from analysis
 
 
-# 17. Plot each session mask  ################################################
+# numeric covariate correlation matrix
+num_cov <- covariates(masklist[[i]])[sapply(covariates(masklist[[i]]), is.numeric)]
+
+cor(num_cov, use="complete.obs")
+
+# 9. Scale covariates across sessions #########################################
+# use an average scale for both sessions so 1 SD means the same for both sessions
+
+scale_covariates <- c(
+  "d.to.shore",
+  "d.to.road",
+  "elev",
+  "slope",
+  "d.to.MLA",
+  "d.to.humans",
+  "d.to.Airport",
+  "d.to.CampTinian",
+  "d.to.Dump",
+  "d.to.NorthField",
+  "d.to.Quarry",
+  "d.to.Town",
+  "d.to.VOA"
+)
+
+for (v in scale_covariates) {
+  
+  # Combine values from all sessions
+  all_vals <- unlist(lapply(masklist, function(m) covariates(m)[[v]]))
+  
+  # Global mean and SD
+  mu <- mean(all_vals, na.rm = TRUE)
+  sigma <- sd(all_vals, na.rm = TRUE)
+  
+  # Apply the same scaling to every session
+  for (i in seq_along(masklist)) {
+    
+    covs <- covariates(masklist[[i]])
+    covs[[paste0(v, "_z")]] <- (covs[[v]] - mu) / sigma
+    covariates(masklist[[i]]) <- covs
+  }
+}
+
+# check that it worked: 
+summary(covariates(masklist[[1]])$d.to.shore_z)
+summary(covariates(masklist[[2]])$d.to.shore_z)
+
+for (v in scale_covariates) {
+  all_z <- unlist(lapply(masklist, function(m) covariates(m)[[paste0(v, "_z")]]))
+  cat(v,
+      "mean =", round(mean(all_z), 6),
+      "sd =", round(sd(all_z), 6), "\n")
+} # you want mean ~ 0 and sd ~ 1
+
+# 10. Plot each session mask  ################################################
 plot(island_poly)
 plot(masklist[[1]], pch = 15, cex = 0.3, add = TRUE)
+plot(traps(ch[[1]]), add = TRUE)
 
 plot(island_poly)
 plot(masklist[[2]], pch = 15, cex = 0.3, add = TRUE)
+plot(traps(ch[[2]]), add = TRUE)
+
 
 # double check mask structure
 class(masklist[[1]])
@@ -496,134 +551,8 @@ class(masklist[[2]])
 attributes(masklist[[1]])
 attributes(masklist[[2]])
 
-# 18. Replace any NAs with nearest neighbor ##################################
-for(i in 1:2){
-  
-  m <- masklist[[i]]
-  
-  h <- as.character(covariates(m)$habitat)
-  
-  # convert blanks to NA
-  h[h == ""] <- NA
-  
-  # rebuild factor
-  h <- factor(h)
-  
-  # set reference level -> needs to be dominant category
-  h <- relevel(h, ref = "tangantangan")
-  
-  covariates(m)$habitat <- h
-  
-  masklist[[i]] <- m
-}
 
-table(covariates(masklist[[1]])$habitat, useNA="ifany")
-table(covariates(masklist[[2]])$habitat, useNA="ifany")
-
-
-# 6. replace NAs in habitat & 1 in elev with nearest neighbor..........
-#session 1...
-m <- masklist[[1]]
-
-h <- covariates(m)$habitat
-
-# replace NA with nearest category manually
-h[is.na(h)] <- names(sort(table(h), decreasing = TRUE))[1]
-
-covariates(m)$habitat <- droplevels(h)
-
-masklist[[1]] <- m
-
-#check it worked
-table(
-  covariates(masklist[[1]])$habitat,
-  useNA = "ifany"
-) #good
-
-#session 2....
-m <- masklist[[2]]
-
-h <- covariates(m)$habitat
-
-# replace NA with nearest category manually
-h[is.na(h)] <- names(sort(table(h), decreasing = TRUE))[1]
-
-covariates(m)$habitat <- droplevels(h)
-
-masklist[[2]] <- m
-
-#replace elev NAs with avg elev.....
-#session 1 (only 1 NA there)
-m <- masklist[[1]]
-
-xy <- cbind(m$x, m$y)
-
-elev_vals <- terra::extract(elev, xy)
-
-idx <- which(is.na(elev_vals$tinian_dem))
-
-elev_vals$tinian_dem[idx] <- median(elev_vals$tinian_dem, na.rm = TRUE)
-
-covariates(m)$elev <- elev_vals$tinian_dem
-
-masklist[[1]] <- m
-
-#check it worked
-summary(covariates(masklist[[1]])$elev)
-summary(covariates(masklist[[2]])$elev)
-
-#replace slope NAs with avg elev.....
-#session 1 
-m <- masklist[[1]]
-
-xy <- cbind(m$x, m$y)
-
-slope_vals <- terra::extract(slope, xy)
-
-idx <- which(is.na(slope_vals$slope))
-
-slope_vals$slope[idx] <- median(slope_vals$slope, na.rm = TRUE)
-
-covariates(m)$slope <- slope_vals$slope
-
-masklist[[1]] <- m
-
-#session 2
-m <- masklist[[2]]
-
-xy <- cbind(m$x, m$y)
-
-slope_vals <- terra::extract(slope, xy)
-
-idx <- which(is.na(slope_vals$slope))
-
-slope_vals$slope[idx] <- median(slope_vals$slope, na.rm = TRUE)
-
-covariates(m)$slope <- slope_vals$slope
-
-masklist[[2]] <- m
-
-#check it worked
-summary(covariates(masklist[[1]])$slope)
-summary(covariates(masklist[[2]])$slope)
-
-# 19. Force secr to recognize both session masks  ##############################
-class(masklist) <- c("mask", "list")
-verify(masklist)
-
-#session 1 mask
-plot(island_poly)
-plot(masklist[[1]], pch = 15, cex = 0.4, add = TRUE)
-plot(traps(ch[[1]]), add = TRUE, col = "red", pch = 16)
-
-#session 2 mask
-plot(island_poly)
-plot(masklist[[2]], pch = 15, cex = 0.4, add = TRUE)
-plot(traps(ch[[2]]), add = TRUE, col = "red", pch = 16)
-
-plot(masklist) #weird that session 1 is so different
-
-# 20. Graph mask covariates  ##################################################
+# 11. Graph mask covariates  ##################################################
 
 # habitat data
 plot(island_poly)
@@ -681,11 +610,11 @@ plot(island_poly)
 plot(masklist[[2]], covariate = "elev", pch = 15, cex = 0.6, add = TRUE)
 plot(traps(ch[[2]]), add = TRUE, pch = 16)
 
-# 21. Save mask as rds object  ###################################################
+# 12. Save mask as rds object  ###################################################
 saveRDS(masklist, file = "masklist.rds")
 masklist <- readRDS("masklist.rds")
 
-# 22. Check for mismatch of traps and mask  #####################################
+# 13. Check for mismatch of traps and mask  #####################################
 plot(masklist) #looks like session 2
 plot(traps(ch[[1]]), add = TRUE, col = "red", pch = 16)
 plot(traps(ch[[2]]), add = TRUE, col = "red", pch = 16)

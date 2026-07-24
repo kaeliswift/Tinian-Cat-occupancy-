@@ -530,7 +530,7 @@ plot(traps(ch), add = TRUE, pch = 16)
 
 # 12. Save mask as rds object  ###################################################
 saveRDS(mask, file = "rds")
-masklist <- readRDS("masklist.rds")
+mask <- readRDS("mask.rds")
 
 # 13. Check for mismatch of traps and mask #####################################
 

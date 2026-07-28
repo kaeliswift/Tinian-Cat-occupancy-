@@ -120,7 +120,7 @@ region.N(c0)
 # continuing on with half normal detection rate for now 
 
 # 2b. D ~ covariate models ########################################
-#habitat model (WARNING - fails early) ##########################
+#habitat model ###################
 cDhabitat <- secr.fit(
   ch,
   mask = mask,
@@ -135,15 +135,6 @@ AIC(c0, cDhabitat)
 
 saveRDS(cDhabitat, file = "cDhabitat.rds")
 cDhabitat <- readRDS("cDhabitat.rds")
-
-# cDhabitat produced a variance calculation warning (NaN SEs for some habitat coefficients),
-# indicating that the habitat effects were not well identified. However, this model received
-# essentially no support relative to the top model (ΔAICc > 30), so there is no need
-# to investigate the unstable parameter estimates further. 
-
-# The habitat model was not investigated further because it was poorly
-# supported (ΔAICc > 30 relative to the top model). The variance calculation
-# warning therefore has no effect on model selection or inference.
 
 # add habitat to traps to check which traps are where....
 trap_habitat <- addCovariates(traps(ch), mask)
@@ -218,6 +209,7 @@ summary(cDshoresq)
 saveRDS(cDshoresq, file = "cDshoresq.rds")
 cDshoresq <- readRDS("cDshoresq.rds")
 
+AIC(c0, cDshoresq)
 
 # Quadratic model failed to converge to a meaningful solution
 # (nlm code 5; non-identifiable parameter estimates), so it was
@@ -455,7 +447,54 @@ AIC(c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope,
 
 # BEWARE d.to.MLA and humans have r = 1.00 -- NEED TO SELECT ONE
 
-# 3. h2 mixture models ############
+# proper final model comparison (exclusion of humans and separate human areas)
+AIC( c0, cDshore, cDroad, cDshore.road, cDelev, cDelevsq, cDslope, 
+cDd.to.MLA, cDhabitat)
+
+# 3. season models ###################
+
+# Season is a replacement for having separate sessions
+
+table(covariates(traps(ch))$season)
+
+# g0 
+cg0season <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+    D ~ 1,
+    g0 ~ season,
+    sigma ~ 1
+  ),
+  detectfn = "halfnormal"
+)
+
+saveRDS(cg0season, file = "cg0season.rds")
+cg0season <- readRDS("cg0season.rds")
+
+AIC(c0, cg0season)
+
+# sigma 
+csigmaseason <- secr.fit(
+  ch,
+  mask = mask,
+  model = list(
+    D ~ 1,
+    g0 ~ 1,
+    sigma ~ season
+  ),
+  detectfn = "halfnormal"
+)
+
+saveRDS(csigmaseason, file = "csigmaseason.rds")
+csigmaseason <- readRDS("csigmaseason.rds")
+
+AIC(c0, csigmaseason)
+
+summary(csigmaseason)
+
+
+# 4. h2 mixture models ############
 #g0............
 cg0h2 <- secr.fit(
   ch,
@@ -507,32 +546,33 @@ region.N(
   csigmah2,
   spacing = 250)
 
-#sigma ~ h2, D ~ d.to.MLA
-cDMLAsigmah2 <- secr.fit(
+# g0 ~ h2, D ~ d.to.MLA
+cDMLAg0h2 <- secr.fit(
   ch,
   mask = mask,
   model = list(
     D ~ d.to.MLA_z,
-    g0 ~ 1,
-    sigma ~ h2
+    g0 ~ h2,
+    sigma ~ 1
   ),
   detectfn = "halfnormal"
 )
 
-summary(cDMLAsigmah2)
-saveRDS(cDMLAsigmah2, "cDMLAsigmah2.rds")
+summary(cDMLAg0h2)
+saveRDS(cDMLAg0h2, "cDMLAg0h2.rds")
+cDMLAg0h2 <- readRDS("cDMLAg0h2.rds")
 
 region.N(
-  cDMLAsigmah2,
+  cDMLAg0h2,
   spacing = 250)
 
 region.N(
   c0,
   spacing = 250)
 
-AIC(c0, cg0h2, csigmah2, cDMLAsigmah2)
+AIC(c0, cg0h2, cDMLAg0h2)
 
-# 4. bk models ###############################################################
+# 5. bk models ###############################################################
 # bk checks if there is a animal X site learned response
 # interpretation can get tricky though if detector = "count" for ch which it does
 
@@ -563,7 +603,7 @@ cbksigma <-  secr.fit(
 AIC(c0, cbk, cbksigma) 
 
 
-# 5. N within the MLA ########################################################
+# 6. N within the MLA ########################################################
 # Estimating abundance & avg density in MLA 
 MLA_boundary <- st_read("C:\\Users\\celin\\OneDrive\\Desktop\\Tinian_GIS_layers\\MLA_boundary\\MLA_Boundary_2025.shp")
 
@@ -615,20 +655,32 @@ region.N(
   cDd.to.MLA,
   spacing = 250)
 
-# csigmah2 model...................
+# cg0h2 model...................
 
 #calculate abundance in MLA
 region.N(
-  csigmah2,
+  cg0h2,
   region = mask_MLA,
   spacing = 250)
 
 # calculate abundance in study area
 region.N(
-  csigmah2,
+  cg0h2,
   spacing = 250)
 
-# 6. Useful functions #####################################
+# cDMLAg0h2 model....................
+#calculate abundance in MLA
+region.N(
+  cDMLAg0h2,
+  region = mask_MLA,
+  spacing = 250)
+
+# calculate abundance in study area
+region.N(
+  cDMLAg0h2,
+  spacing = 250)
+
+# 7. Useful functions #####################################
 closedN(ch) #assumes closed population
 
 suggest.buffer(mDshore) #~9000 m for both sessions

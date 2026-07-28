@@ -306,9 +306,32 @@ ch <- read.capthist(
 # Attach Usage/Effort 
 usage(traps(ch)) <- usage_combined
 
+# 11. Add Season covariate at trap-level #######################################
+# Add season covariate to each trap
+trap_season <- start_end %>%
+  group_by(Site.Name) %>%
+  summarise(
+    season = first(Session),   # each trap only belongs to one session
+    .groups = "drop"
+  ) %>%
+  rename(TrapID = Site.Name)
 
+traps_combined <- traps_combined %>%
+  left_join(trap_season, by = "TrapID") %>%
+  mutate(
+    season = factor(season,
+                    levels = c(1, 2),
+                    labels = c("fall", "spring"))
+  )
 
-# 11. Inspect new ch ###################################################################
+# attach trap covariates
+covariates(traps(ch)) <- traps_combined %>%
+  select(season)
+
+covariates(traps(ch))
+table(covariates(traps(ch))$season)
+
+# 12. Inspect new ch ###################################################################
 summary(ch)
 traps(ch)
 plot(ch, tracks = TRUE)

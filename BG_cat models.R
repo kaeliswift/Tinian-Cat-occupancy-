@@ -26,22 +26,41 @@ verify(mask)
 #null models #############################
 null <- secr.fit(ch,mask = mask,
                  model = list(D ~ 1,g0 ~ 1,sigma ~ 1),
-                 detectfn = "halfnormal")
+                 detectfn = 1)
 
 gh2 <-secr.fit(ch,mask = mask,
                model = list(D ~ 1,g0 ~ h2,sigma ~ 1),
-               detectfn = "halfnormal")
+               detectfn = 1)
 
 sh2 <- secr.fit(ch,mask = mask,
                 model = list(D ~ 1,g0 ~ 1,sigma ~ h2),
-                detectfn = "halfnormal")
+                detectfn = 1)
 
 gsh2 <- secr.fit(ch,mask = mask,
                  model = list(D ~ 1,g0 ~ h2,sigma ~ h2),
-                 detectfn = "halfnormal")
+                 detectfn = 1)
 
 
 AIC(null, gh2, gsh2, sh2) #sh2 is best, move forward with it
+
+
+
+#null models #############################
+null <- secr.fit(ch,mask = mask,
+                 model = list(D ~ 1,g0 ~ 1,sigma ~ 1),
+                 detectfn = 0)
+
+#null models #############################
+nullhaz <- secr.fit(ch,mask = mask,
+                 model = list(D ~ 1,g0 ~ 1,sigma ~ 1),
+                 detectfn = 1)
+
+#null models #############################
+null <- secr.fit(ch,mask = mask,
+                 model = list(D ~ 1,g0 ~ 1,sigma ~ 1),
+                 detectfn = "halfnormal")
+
+
 
 
 # add habitat to traps to check which traps are where....

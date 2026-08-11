@@ -19,9 +19,9 @@ CatImages <- suppressWarnings(
 CatLocations<- suppressWarnings(
   read_excel("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Cat Occupancy Study/Data/cat_cam_deployment_landcover_type.xls")) 
 
-CatImages <-read.csv("CatOccupancy_ImageData.csv")
+#CatImages <-read.csv("CatOccupancy_ImageData.csv")
 
-CatLocations<- read_excel("cat_cam_deployment_landcover_type.xls")
+#CatLocations<- read_excel("cat_cam_deployment_landcover_type.xls")
 
 
 #####Post processing steps#####

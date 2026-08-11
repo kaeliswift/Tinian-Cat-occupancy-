@@ -19,6 +19,11 @@ CatImages <- suppressWarnings(
 CatLocations<- suppressWarnings(
   read_excel("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Cat Occupancy Study/Data/cat_cam_deployment_landcover_type.xls")) 
 
+CatImages <-read.csv("CatOccupancy_ImageData.csv")
+
+CatLocations<- read_excel("cat_cam_deployment_landcover_type.xls")
+
+
 #####Post processing steps#####
 #Format dates 
 CatImages <- CatImages |>
@@ -120,6 +125,22 @@ CatActivity_site <- CatActivity_hourly |>
   )
 
 
+library(leaflet) #required R package
 
+#plot map - street map
+leaflet(CatActivity_site) %>% setView(lng=145.6289, lat=15.04, zoom = 12) %>% 
+  addProviderTiles(providers$Esri.WorldStreetMap) %>% 
+  addCircleMarkers(~Longitude, ~Latitude, radius = ~total_unique_detections/2)
 
-
+# Plot map - satellite map
+leaflet(CatActivity_site) %>% 
+  setView(lng = 145.6289, lat = 15.04, zoom = 12) %>% 
+  addProviderTiles(providers$Esri.WorldImagery) %>% 
+  addCircleMarkers(
+    ~Longitude, 
+    ~Latitude, 
+    radius = ~total_unique_detections / 2,
+    color = "red",
+    fillColor = "red",
+    fillOpacity = 0.7
+  )

@@ -1,5 +1,4 @@
 
-Yes
 library(tidyverse) # used for dataframe man
 library(readxl) # import excel
 library(janitor) # clean column
@@ -121,37 +120,6 @@ CatActivity_site <- CatActivity_hourly |>
   )
 
 
-#make a map 
-library(sf)
-library(ggplot2)
 
-CatActivity_sf <- CatActivity_site |>
-  st_as_sf(
-    coords = c("Longitude", "Latitude"),
-    crs = 4326
-  )
-
-ggplot() +
-  geom_sf(
-    data = CatActivity_sf,
-    aes(
-      size = total_unique_detections,
-      color = total_unique_detections
-    ),
-    alpha = 0.7
-  ) +
-  scale_color_viridis_c(
-    option = "inferno",
-    name = "Total\nunique detections"
-  ) +
-  scale_size_continuous(
-    name = "Total\nunique detections"
-  ) +
-  labs(
-    title = "Total Cat Activity by Site",
-    x = "Longitude",
-    y = "Latitude"
-  ) +
-  theme_classic()
 
 

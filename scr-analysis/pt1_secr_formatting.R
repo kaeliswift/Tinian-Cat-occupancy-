@@ -62,12 +62,50 @@ data <- data %>%
   mutate(Session = ifelse(year(DateTime) == 2024, 1, 2),
     Animal = Individuals)
 
-#Filters to detection > 30 min apart (clusters are 30 min apart)................
+# Identify independent detection events:
+#
+# Repeated detections of the same individual at the same site
+# within 30 minutes are treated as one continuous detection event.
+#
+# A gap >30 minutes starts a new detection event.
+#
+# The first detection in each continuous sequence is retained,
+# resulting in one row per independent detection event.
+
 data <- data %>%
-  arrange(Cluster.ID, Individuals, DateTime) %>%
-  group_by(Site.Name, Cluster.ID, Individuals) %>%
+  
+  # Sort detections by site, individual, session, and time
+  arrange(Site.Name, Individuals, Session, DateTime) %>%
+  
+  # Perform the 30-minute calculation separately for each
+  # individual at each site within each session
+  group_by(Site.Name, Individuals, Session) %>%
+  
+  # Calculate the time since the previous detection
+  mutate(
+    time_diff = as.numeric(
+      difftime(DateTime, lag(DateTime), units = "mins")
+    ),
+    
+    # Start a new detection event when:
+    # 1. This is the first detection, OR
+    # 2. More than 30 minutes have passed since the previous detection
+    detection_event = cumsum(
+      is.na(time_diff) | time_diff > 30
+    )
+  ) %>%
+  
+  # Group by each independent detection event
+  group_by(Site.Name, Individuals, Session, detection_event) %>%
+  
+  # Keep only the first observation from each detection event
   slice(1) %>%
-  ungroup()
+  
+  # Remove grouping
+  ungroup() %>%
+  
+  # Remove temporary columns
+  select(-time_diff, -detection_event)
 
 # 5. Session-wide Occasions ####################################################
 # occasion start dates are camera deployment dates

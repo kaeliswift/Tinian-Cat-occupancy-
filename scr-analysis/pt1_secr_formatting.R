@@ -407,18 +407,12 @@ suggest.buffer(cats.HN8000) #8000 and 9000 m -> not as bad
 
 
 # Checking D estimates & changes in buffer size #################################
-#OK... next moves before models......
-#graph buffer sizes & D estimates
-#decide on final buffer
-
-#Exploring buffer sizes
-buffers <- c(3000, 5000, 7000, 9000, 11000, 13000) #checking 3 km to 11 km 
 
 #read in shapefile data
 # you will have to download and direct R to your GIS layers (they are too big to store in the repo)
 
 tinian <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp")
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/amidon_2016_tinian.shp")
 
 # make sure CRS matches traps
 st_crs(tinian)
@@ -426,62 +420,8 @@ st_crs(tinian)
 # dissolve polygons into single island boundary
 island_boundary <- st_union(tinian)
 
-# run function that changes buffer to calculate several D estimates
-fits <- lapply(buffers, function(b) { #THIS WILL TAKE A LOT OF TIME 
-  
-  mask_b <- make.mask(
-    traps(ch),
-    buffer = b,
-    spacing = 250, #can change this
-    type = "trapbuffer", #restricts the grid to points within distance buffer of any detector.
-    poly = vect(island_boundary)
-  )
-  
-  secr.fit(
-    ch,
-    mask = mask_b,
-    detectfn = 0   # half normal
-  )
-})
-
-
-saveRDS(fits, file = "D_buffer_fits.rds")
-fits <- readRDS("D_buffer_fits.rds")
-
-
-# extract density values (D) from fits
-D_values <- sapply(fits, function(fit) {
-  derived(fit)["D", "estimate"]
-})
-
-#plot estimates vs buffer size
-D_df <- data.frame(
-  buffer = buffers,
-  D = D_values
-)
-
-D_df
-
-plot(
-  D_df$buffer,
-  D_df$D,
-  type = "b",
-  xlab = "Buffer distance (m)",
-  ylab = "Density (cats/ha)"
-)
-
-
-#checking if D estimate stabilizes by looking at values
-D_df
-
-#check in N stabilizes 
-region.N(fits[[which(buffers == 7000)]])
-region.N(fits[[which(buffers == 9000)]])
-region.N(fits[[which(buffers == 11000)]])
-
-# Ok trying again but including 8000 m..............
 #Exploring buffer sizes
-buffers <- c(7000, 8000, 9000, 10000, 11000) #checking 7 km to 11 km 
+buffers <- c(6000, 7000, 8000, 9000, 10000, 11000) #checking 7 km to 11 km 
 
 # run function that changes buffer to calculate several D estimates
 fits <- lapply(buffers, function(b) { #THIS WILL TAKE A LOT OF TIME 
@@ -546,173 +486,4 @@ esaPlot(fits[[2]])
 summary(ch)
 plot(ch, tracks = TRUE)
 
-usage(traps(ch[[1]]))[1:42, ] #currently no usage -> ran into errors due to full usage in session 2& partial usage in session 1
-usage(traps(ch[[2]]))[1:8, ]                      # session 1 is still mainly covered so will ignore usage for now 
-
-# ch for session 1
-plot(island_poly)
-plot(ch[[1]], tracks = TRUE, add = TRUE)
-
-#ch for session 2
-plot(island_poly)
-plot(ch[[2]], tracks = TRUE, add = TRUE)
-
-
-
-# individuals for session 1...........
-ids <- rownames(ch[[1]])
-
-par(mfrow = c(2,3))
-
-for (id in ids) {
-  
-  ch.ind <- subset(ch[[1]], subset = id)
-  
-  plot(island_poly, axes = FALSE)
-  
-  suppressWarnings(
-    plot(ch.ind,
-         tracks = TRUE,
-         add = TRUE)
-  )
-  
-  mtext(id, side = 2, line = 0.2, cex = 0.8)
-}
-
-# generate pdf 
-pdf("individual_tracks_session1.pdf",
-    width = 11,
-    height = 8.5)
-
-ids <- rownames(ch[[1]])
-
-par(mfrow = c(2,3), mar = c(1,1,2,1))
-
-for (id in ids) {
-  
-  ch.ind <- subset(ch[[1]], subset = id)
-  
-  plot(island_poly, axes = FALSE)
-  
-  suppressWarnings(
-    plot(ch.ind,
-         tracks = TRUE,
-         add = TRUE)
-  )
-  
-  mtext(id, side = 2, line = 0.2, cex = 0.8)
-}
-
-dev.off()
-
-# individuals for session 2 ...........
-# generate pdf 
-pdf("individual_tracks_session2.pdf",
-    width = 11,
-    height = 8.5)
-
-ids <- rownames(ch[[2]])
-
-par(mfrow = c(2,3), mar = c(1,1,2,1))
-
-for (id in ids) {
-  
-  ch.ind <- subset(ch[[2]], subset = id)
-  
-  plot(island_poly, axes = FALSE)
-  
-  suppressWarnings(
-    plot(ch.ind,
-         tracks = TRUE,
-         add = TRUE)
-  )
-  
-  mtext(id, side = 2, line = 0.2, cex = 0.8)
-}
-
-dev.off()
-
-# detections session 1
-detections <- apply(ch[[1]], 1, sum)
-
-det.table <- data.frame(
-  animalID = names(detections),
-  detections = detections
-)
-
-det.table
-
-occasions.detected <- apply(
-  ch[[1]],
-  1,
-  function(x) sum(apply(x, 1, sum) > 0)
-)
-
-data.frame(
-  animalID = rownames(ch[[1]]),
-  totalDetections = apply(ch[[1]], 1, sum),
-  occasionsDetected = occasions.detected
-)
-
-trap.visits <- apply(
-  ch[[1]],
-  1,
-  function(x) sum(colSums(x) > 0)
-)
-
-summary.table.sess1 <- data.frame(
-  animalID = rownames(ch[[1]]),
-  totalDetections = apply(ch[[1]], 1, sum),
-  occasionsDetected = occasions.detected,
-  trapsVisited = trap.visits
-)
-
-summary.table.sess1 <- summary.table.sess1[order(summary.table.sess1$totalDetections,
-                                                 decreasing = TRUE), ]
-
-summary.table.sess1
-
-write.csv(summary.table.sess1, "session1_detections.csv")
-
-# detections session 2
-detections <- apply(ch[[2]], 1, sum)
-
-det.table <- data.frame(
-  animalID = names(detections),
-  detections = detections
-)
-
-det.table
-
-occasions.detected <- apply(
-  ch[[2]],
-  1,
-  function(x) sum(apply(x, 1, sum) > 0)
-)
-
-data.frame(
-  animalID = rownames(ch[[2]]),
-  totalDetections = apply(ch[[2]], 1, sum),
-  occasionsDetected = occasions.detected
-)
-
-trap.visits <- apply(
-  ch[[2]],
-  1,
-  function(x) sum(colSums(x) > 0)
-)
-
-summary.table.sess2 <- data.frame(
-  animalID = rownames(ch[[2]]),
-  totalDetections = apply(ch[[2]], 1, sum),
-  occasionsDetected = occasions.detected,
-  trapsVisited = trap.visits
-)
-
-summary.table.sess2 <- summary.table.sess2[order(summary.table.sess2$totalDetections,
-                                                 decreasing = TRUE), ]
-
-summary.table.sess2
-
-write.csv(summary.table.sess2, "session2_detections.csv")
 

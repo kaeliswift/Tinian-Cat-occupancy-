@@ -18,7 +18,7 @@ summary(ch) #good
 # 2. Read habitat shapefile  #####################################
 # you will have to download and direct R to your GIS layers (they are too big to store in the repo)
 tinian <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/tinian_release.shp")
+  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/amidon_2016_tinian.shp")
 
 # make sure CRS matches traps
 st_crs(tinian)
@@ -26,22 +26,24 @@ st_crs(tinian)
 # dissolve polygons into single island boundary
 island_boundary <- st_union(tinian)
 
-plot((island_boundary)) #shows island boundary
-
 # create spatial polygon.... more clear for secr
 # convert island_boundary to SpatVect
 island_poly <- vect(island_boundary)
 
+plot(island_poly)  #shows island boundary
+
 # 3. Reclassify habitat ##########################################
+unique(tinian$VegClass)
+
 tinian <- tinian %>%
   mutate(
     habitat = case_when(
-      grepl("Leucaena", CLASS) ~ "tangantangan",
-      grepl("Mixed", CLASS) ~ "mixed_introduced",
-      grepl("Casuarina", CLASS) ~ "mixed_introduced", #ironwood is included in mixed_introduced
-      grepl("Other", CLASS) ~ "shrub_grass",
-      grepl("Native", CLASS) ~ "native_limestone",
-      TRUE ~ NA_character_
+      grepl("Leucaena", VegClass) ~ "tangantangan",
+      grepl("Mixed Introduced", VegClass) ~ "mixed_introduced",
+      grepl("Casuarina", VegClass) ~ "mixed_introduced", #ironwood is included in mixed_introduced
+      grepl("Mixed Grass/Herbaceous", VegClass) ~ "shrub_grass",
+      grepl("Native", VegClass) ~ "native_limestone",
+      TRUE ~ NA_character_ #leave everything else as NAs to be filled with nearest neighbor
     )
   )
 
@@ -122,11 +124,6 @@ humans <- st_read(
   "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/Human_activity/humans.shp")
 
 st_crs(humans) == st_crs(tinian) # bad
-humans <- st_geometry(humans)
-
-# plot humans covariate
-plot(island_poly)
-plot(st_geometry(humans), add = TRUE, col = "pink")
 
 table(humans$Name) #available human locations
 
@@ -188,6 +185,12 @@ legend(
     "purple"
   ),
   bty = "n")
+
+# create humans covariate
+humans <- st_geometry(humans)
+# plot humans covariate
+plot(island_poly)
+plot(st_geometry(humans), add = TRUE, col = "pink")
 
 
 # 6. Create mask w/ covariates  ################################################

@@ -261,3 +261,15 @@ region.N(
   Dshore,
   region = mask_MLA,
   spacing = 250)
+
+# 8. Map Density from top model ########################
+#try graphing --- not perfect but somewhere to start
+hold=predictDsurface(Dshore, mask = mask, se.D = FALSE, cl.D = FALSE, alpha =0.05)
+plot(island_poly)
+plot(hold, add = TRUE)  
+plot(traps(ch),  add = TRUE, col = "red", pch = 16)
+
+esaPlot(Dshore) # concerning --- used to look ok 
+plot(Dshore)
+
+hist(covariates(mask)$d.to.shore_z)

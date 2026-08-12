@@ -67,7 +67,6 @@ Dhabitat <- secr.fit(ch,mask = mask,
 
 
 # shore model ##################
-
 Dshore <- secr.fit(ch,mask = mask,
                    model = list(D ~ d.to.shore_z,g0 ~ h2,sigma ~ h2),
                    detectfn = "hazard rate")
@@ -78,7 +77,6 @@ Dshoresq <- secr.fit(ch,mask = mask,
 
 
 # nearest road model #################################
-
 Droad <- secr.fit(ch,mask = mask,
                   model = list(D ~ d.to.road_z, g0 ~ h2, sigma ~ h2),
                   detectfn = "hazard rate")
@@ -162,12 +160,13 @@ DVOA <- secr.fit(ch,mask = mask,
                  detectfn = "hazard rate")
 
 # compare AIC  ###########################
-AIC(gsh2, Dshore,Dshoresq, Droad, Dshore.road, Delev, Delevsq, Dslope, DMLA, Dd.to.MLA, Dhumans, 
-    DAirport, cDCampTinian,DDump, DNorthField, DQuarry, DTown, DVOA)
+AIC(gsh2, Dhabitat, Dshore,Dshoresq, Droad, Dshore.road, Delev, Delevsq, Dslope, DMLA, Dd.to.MLA, Dhumans, 
+    DAirport, DCampTinian,DDump, DNorthField, DQuarry, DTown, DVOA)
 
 # 4. Save models ###################################
 models <- list(
-  sh2 = sh2,
+  gsh2 = gsh2,
+  Dhabitat = Dhabitat,
   Dshore = Dshore,
   Dshoresq = Dshoresq,
   Droad = Droad,
@@ -179,7 +178,7 @@ models <- list(
   Dd.to.MLA = Dd.to.MLA,
   Dhumans = Dhumans,
   DAirport = DAirport,
-  cDCampTinian = cDCampTinian,
+  DCampTinian = DCampTinian,
   DDump = DDump,
   DNorthField = DNorthField,
   DQuarry = DQuarry,
@@ -191,8 +190,6 @@ saveRDS(models, "secr_models.rds") # can save this out somewhere
 
 
 # 5. Read in models if needed ###############################
-models <- readRDS("secr_models.rds")
-
 models <- readRDS("secr_models.rds")
 
 list2env(models, envir = .GlobalEnv)

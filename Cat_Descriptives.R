@@ -9,17 +9,18 @@ library(ggplot2)
 library(dplyr)
 library(plyr)
 library(leaflet) 
+library(MASS)
 
 #Step 1 import the data 
 #KAELI'S mac path 
 CatImages <- suppressWarnings(
-  read.csv("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Cat Occupancy Study/Data/CatOccupancy_ImageData.csv")) 
+  read.csv("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW 2/Tinian Forest Bird project/Cat Occupancy Study/Data/CatOccupancy_ImageData.csv")) 
 
 CatLocations<- suppressWarnings(
-  read_excel("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Cat Occupancy Study/Data/cat_cam_deployment_landcover_type.xls")) 
+  read_excel("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW 2/Tinian Forest Bird project/Cat Occupancy Study/Data/cat_cam_deployment_landcover_type.xls")) 
 
 CatIDs <- suppressWarnings(
-  read.csv("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Cat Occupancy Study/Data/TrapTagger_Cat_Individuals.csv")) 
+  read.csv("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW 2/Tinian Forest Bird project/Cat Occupancy Study/Data/TrapTagger_Cat_Individuals.csv")) 
 
 
 
@@ -159,6 +160,14 @@ CatActivity_hourlyInd <- CatActivity_eventsInd |>
   mutate(
     hour = lubridate::hour(event_datetime)
   )
+
+#Total activity per hour
+Hourly_table<-CatActivity_hourlyInd |>
+  dplyr::count(hour, name = "total_observations") |>
+  arrange(hour)
+print(Hourly_table, n=24)
+
+
 
 # Plot number of unique detections by hour_individual
 ggplot(CatActivity_hourlyInd, aes(x = hour)) +

@@ -195,12 +195,9 @@ models <- readRDS("secr_models.rds")
 list2env(models, envir = .GlobalEnv)
 
 # 6. Compare AIC ###################################
-do.call(AIC, models)
-
-AIC(gsh2, Dshore, Dhabitat)
 
 AIC(gsh2, Dshore,Dshoresq, Droad, Dshore.road, Delev, Delevsq, Dslope, DMLA, Dd.to.MLA, Dhumans, 
-    DAirport, cDCampTinian,DDump, DNorthField, DQuarry, DTown, DVOA)
+    DAirport, DCampTinian,DDump, DNorthField, DQuarry, DTown, DVOA)
 
 # 7. Calculate abundance #################################
 # Read in MLA boundary ................. 

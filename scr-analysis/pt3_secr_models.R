@@ -200,17 +200,18 @@ AIC(gsh2, Dshore,Dshoresq, Droad, Dshore.road, Delev, Delevsq, Dslope, DMLA, Dd.
     DAirport, DCampTinian,DDump, DNorthField, DQuarry, DTown, DVOA)
 
 # 7. Calculate abundance #################################
-# Read in MLA boundary ................. 
-MLA_boundary <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/MLA_boundary/MLA_Boundary_2025.shp"
-)
+## Read in MLA boundary ................. 
+#MLA_boundary <- st_read(
+  #"C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/MLA_boundary/MLA_Boundary_2025.shp")
+MLA_boundary <- st_read("MLA_Boundary_2025.shp")
 
 MLA_boundary <- st_transform(MLA_boundary, 32655)
 
-# read in island boundary
-tinian <- st_read(
-  "C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/amidon_2016_tinian.shp"
-)
+## read in island boundary
+#tinian <- st_read(
+  #"C:/Users/celin/OneDrive/Desktop/Tinian_GIS_layers/CNMI Hi-Res veg data/amidon_2016_tinian.shp")
+
+tinian <- st_read("amidon_2016_tinian.shp")
 
 # Standardize CRS metadata
 st_crs(tinian) <- 32655
@@ -262,6 +263,9 @@ region.N(
   region = mask_MLA,
   spacing = 250)
 
+Dshore
+
+
 # 8. Map Density from top model ########################
 #try graphing --- not perfect but somewhere to start
 hold=predictDsurface(Dshore, mask = mask, se.D = FALSE, cl.D = FALSE, alpha =0.05)
@@ -273,3 +277,23 @@ esaPlot(Dshore) # concerning --- used to look ok
 plot(Dshore)
 
 hist(covariates(mask)$d.to.shore_z)
+
+#Plot elevation 
+d <- data.frame(
+  x = mask[, "x"],
+  y = mask[, "y"],
+  habitat = covariates(mask)$elev
+)
+
+plot(d$x, d$y, col = heat.colors(20)[cut(d$habitat, 20)],
+     pch = 15, asp = 1)
+
+
+#plots model predicted activity centers (calculates the mode of the activity centers for observed cats)
+fx.mode=as.data.frame(matrix(NA, 47, 2))
+for(j in 1:47){
+  fx.mode[j,] <- fxiMode(gsh2, i = j)
+}
+points(fx.mode, pch=15)
+#adds trap locations
+points(traps(ch))

@@ -21,46 +21,37 @@ verify(ch)  # should say: no errors found :-)
 mask <- readRDS("scr-analysis/mask.rds")
 verify(mask)
 
-###2. Run h2 models
-
-#null models #############################
-null <- secr.fit(ch,mask = mask,
-                 model = list(D ~ 1,g0 ~ 1,sigma ~ 1),
-                 detectfn = 1)
-
-gh2 <-secr.fit(ch,mask = mask,
-               model = list(D ~ 1,g0 ~ h2,sigma ~ 1),
-               detectfn = 1)
-
-sh2 <- secr.fit(ch,mask = mask,
-                model = list(D ~ 1,g0 ~ 1,sigma ~ h2),
-                detectfn = 1)
-
-gsh2 <- secr.fit(ch,mask = mask,
-                 model = list(D ~ 1,g0 ~ h2,sigma ~ h2),
-                 detectfn = 1)
-
-
-AIC(null, gh2, gsh2, sh2) #sh2 is best, move forward with it
-
+###2. Compare models - first select detection function
 
 
 #null models #############################
 null <- secr.fit(ch,mask = mask,
                  model = list(D ~ 1,g0 ~ 1,sigma ~ 1),
-                 detectfn = 0)
+                 detectfn = 14)
 
 #null models #############################
 nullhaz <- secr.fit(ch,mask = mask,
-                 model = list(D ~ 1,g0 ~ 1,sigma ~ 1),
-                 detectfn = 1)
-
-#null models #############################
-null <- secr.fit(ch,mask = mask,
-                 model = list(D ~ 1,g0 ~ 1,sigma ~ 1),
-                 detectfn = "halfnormal")
+                    model = list(D ~ 1,g0 ~ 1,sigma ~ 1),
+                    detectfn = 15)
 
 
+#Hazard model (15) is the best, now to compare the heterogeneity
+#############################
+
+gh2 <-secr.fit(ch,mask = mask,
+               model = list(D ~ 1,g0 ~ h2,sigma ~ 1),
+               detectfn = 15)
+
+sh2 <- secr.fit(ch,mask = mask,
+                model = list(D ~ 1,g0 ~ 1,sigma ~ h2),
+                detectfn = 15)
+
+gsh2 <- secr.fit(ch,mask = mask,
+                 model = list(D ~ 1,g0 ~ h2,sigma ~ h2),
+                 detectfn = 15)
+
+
+AIC(nullhaz, gh2, gsh2, sh2) #gsh2 is best, move forward with it
 
 
 # add habitat to traps to check which traps are where....
@@ -93,100 +84,100 @@ table(capt2$habitat)
 # shore model ##################
 
 Dshore <- secr.fit(ch,mask = mask,
-                   model = list(D ~ d.to.shore_z,g0 ~ 1,sigma ~ h2),
-                   detectfn = "halfnormal")
+                   model = list(D ~ d.to.shore_z,g0 ~ h2,sigma ~ h2),
+                   detectfn = 15)
 
 Dshoresq <- secr.fit(ch,mask = mask,
-                     model = list(D ~ d.to.shore_z+ I(d.to.shore_z^2),g0~ 1,sigma ~ h2),
-                     detectfn = "halfnormal")
+                     model = list(D ~ d.to.shore_z+ I(d.to.shore_z^2),g0~ h2,sigma ~ h2),
+                     detectfn = 15)
 
 
 # nearest road model #################################
 
 Droad <- secr.fit(ch,mask = mask,
-  model = list(D ~ d.to.road_z, g0 ~ 1, sigma ~ h2),
-  detectfn = "halfnormal")
+  model = list(D ~ d.to.road_z, g0 ~ h2, sigma ~ h2),
+  detectfn = 15)
 
 
 # shore + road model ######################
 Dshore.road <- secr.fit(ch,mask = mask,
-              model = list(D ~ d.to.shore_z + d.to.road_z, g0 ~ 1, sigma ~ h2),
-              detectfn = "halfnormal")
+              model = list(D ~ d.to.shore_z + d.to.road_z, g0 ~ h2, sigma ~ h2),
+              detectfn = 15)
   
 # elevation model ######################################
 Delev <- secr.fit(ch,mask = mask,
-                   model = list(D ~ elev_z, g0 ~ 1, sigma ~ h2),
-                   detectfn = "halfnormal")
+                   model = list(D ~ elev_z, g0 ~ h2, sigma ~ h2),
+                   detectfn = 15)
 
 # elev^2 model...............
 Delevsq <- secr.fit(ch,mask = mask,
-                     model = list(D ~ elev_z + I(elev_z^2), g0 ~ 1, sigma ~ h2),
-                     detectfn = "halfnormal")
+                     model = list(D ~ elev_z + I(elev_z^2), g0 ~ h2, sigma ~ h2),
+                     detectfn = 15)
 
 
 # slope model ######################################
 Dslope <- secr.fit(ch, mask = mask,
-                    model = list(D ~ slope_z, g0 ~ 1, sigma ~ h2), 
-                    detectfn = "halfnormal")
+                    model = list(D ~ slope_z, g0 ~ h2, sigma ~ h2), 
+                    detectfn = 15)
 
 # MLA area models ###############################
 #Inside/outside MLA activity areas model ...............
 DMLA <- secr.fit(ch, mask = mask,
-                  model = list(D ~ MLA, g0 ~ 1, sigma ~ h2),
-                  detectfn = "halfnormal")
+                  model = list(D ~ MLA, g0 ~ h2, sigma ~ h2),
+                  detectfn = 15)
 
 
 # Distance to MLA activity areas model ...............
 Dd.to.MLA <- secr.fit(ch, mask = mask,
-                       model = list(D ~ d.to.MLA_z, g0 ~ 1, sigma ~ h2),
-                       detectfn = "halfnormal")
+                       model = list(D ~ d.to.MLA_z, g0 ~ h2, sigma ~ h2),
+                       detectfn = 15)
 
 
 # human areas models ###################################
 # human activity areas model ......................
 Dhumans <- secr.fit(ch,mask = mask,
-                     model = list(D ~ d.to.humans_z, g0 ~ 1, sigma ~ h2),
-                     detectfn = "halfnormal")
+                     model = list(D ~ d.to.humans_z, g0 ~ h2, sigma ~ h2),
+                     detectfn = 15)
 
 # Airport model ...............................
 DAirport <- secr.fit(ch,mask = mask,
-                      model = list(D ~ d.to.Airport_z, g0 ~ 1, sigma ~ h2),
-                      detectfn = "halfnormal")
+                      model = list(D ~ d.to.Airport_z, g0 ~ h2, sigma ~ h2),
+                      detectfn = 15)
 
 # Camp Tinian model ........................
 DCampTinian <- secr.fit(ch,mask = mask,
-                         model = list(D ~ d.to.CampTinian_z, g0 ~ 1, sigma ~ h2),
-                         detectfn = "halfnormal")
+                         model = list(D ~ d.to.CampTinian_z, g0 ~ h2, sigma ~ h2),
+                         detectfn = 15)
 
 # Dump model .......................................
 DDump <- secr.fit(ch,mask = mask,
-                   model = list(D ~ d.to.Dump_z, g0 ~ 1, sigma ~ h2),
-                   detectfn = "halfnormal")
+                   model = list(D ~ d.to.Dump_z, g0 ~ h2, sigma ~ h2),
+                   detectfn = 15)
 
 # North Field model.........................
 DNorthField <- secr.fit(ch,
                          mask = mask,
-                         model = list(D ~ d.to.NorthField_z, g0 ~ 1, sigma ~ h2),
-                         detectfn = "halfnormal")
+                         model = list(D ~ d.to.NorthField_z, g0 ~ h2, sigma ~ h2),
+                         detectfn = 15)
 
 # Quarry model .......................................
 DQuarry <- secr.fit(ch,mask = mask,
-                     model = list(D ~ d.to.Quarry_z, g0 ~ 1, sigma ~ h2),
-                     detectfn = "halfnormal")
+                     model = list(D ~ d.to.Quarry_z, g0 ~ h2, sigma ~ h2),
+                     detectfn = 15)
 
 
 # Town model ................................. 
-DTown <- secr.fit(ch,mask = mask,model = list(D ~ d.to.Town_z, g0 ~ 1, sigma ~ h2),
-                   detectfn = "halfnormal")
+DTown <- secr.fit(ch,mask = mask,model = list(D ~ d.to.Town_z, g0 ~ h2, sigma ~ h2),
+                   detectfn = 15)
 
 
 # VOA model ..............................
 DVOA <- secr.fit(ch,mask = mask,
-                  model = list(D ~ d.to.VOA_z, g0 ~ 1, sigma ~ h2),
-                  detectfn = "halfnormal")
+                  model = list(D ~ d.to.VOA_z, g0 ~ h2, sigma ~ h2),
+                  detectfn = 15)
 
-AIC(sh2, Dshore,Dshoresq, Droad, Dshore.road, Delev, Delevsq, Dslope, DMLA, Dd.to.MLA, Dhumans, 
-    DAirport, cDCampTinian,DDump, DNorthField, DQuarry, DTown, DVOA)
+AIC(gsh2, Dshore,Dshoresq, Droad, Dshore.road, Delev, Delevsq, Dslope, DMLA, Dd.to.MLA, Dhumans, 
+    DAirport, DCampTinian,DDump, DNorthField, DQuarry, DTown, DVOA)
 
 
 region.N(
@@ -196,4 +187,31 @@ region.N(
 region.N(
   Delev,
   spacing = 250)
+
+
+####Some random plotting code
+
+
+d <- data.frame(
+  x = mask[, "x"],
+  y = mask[, "y"],
+  habitat = covariates(mask)$elev
+)
+
+plot(d$x, d$y, col = heat.colors(20)[cut(d$habitat, 20)],
+     pch = 15, asp = 1)
+
+
+fx.mode=as.data.frame(matrix(NA, 47, 2))
+for(j in 1:47){
+  fx.mode[j,] <- fxiMode(gsh2, i = j)
+}
+points(fx.mode, pch=15)
+
+counts<-NULL
+for(i in 1:50){
+  counts[i]<-sum(ch[,,i])
+}
+
+points(traps(ch), col=counts, pch=15)
 
